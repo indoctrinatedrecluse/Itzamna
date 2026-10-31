@@ -7,7 +7,7 @@ pub mod status_bar;
 pub mod top_menu;
 
 pub use bottom_prophecy::{BottomProphecy, ProphecyLevel, ProphecyMessage};
-pub use center_loom::{CenterLoom, CenterLoomMessage, CommitNode};
+pub use center_loom::{CenterLoom, CenterLoomMessage};
 pub use glyph_ribbon::GlyphRibbon;
 pub use left_codex::{LeftCodex, LeftCodexMessage};
 pub use right_altar::{FileEntry, RightAltar, RightAltarMessage};
