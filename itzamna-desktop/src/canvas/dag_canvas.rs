@@ -4,7 +4,7 @@
 
 use iced::mouse;
 use iced::widget::canvas::{self, Canvas, Frame, Geometry, Path, Stroke, Text};
-use iced::{Color, Element, Point, Rectangle, Renderer, Size, Theme};
+use iced::{Color, Element, Length, Point, Rectangle, Renderer, Size, Theme};
 
 use crate::git::GitCommitNode;
 use crate::theme::MayaColors;
@@ -12,6 +12,7 @@ use crate::theme::MayaColors;
 #[derive(Debug, Clone)]
 pub enum DagMessage {
     CommitSelected(String),
+    Scrolled(f32),
 }
 
 #[derive(Debug, Clone)]
@@ -65,7 +66,17 @@ impl DagCanvas {
         self.pan_y = 20.0;
     }
 
-    pub fn view<'a, Message: 'a + From<DagMessage>>(&'a self, width: f32, height: f32) -> Element<'a, Message> {
+    pub fn pan(&mut self, dy: f32) {
+        let max_pan = 40.0;
+        let min_pan = -((self.commits.len() as f32 * self.row_height * self.zoom) - 200.0).max(0.0);
+        self.pan_y = (self.pan_y + dy).clamp(min_pan, max_pan);
+    }
+
+    pub fn view<'a, Message: 'a + From<DagMessage>>(
+        &'a self,
+        width: impl Into<Length>,
+        height: impl Into<Length>,
+    ) -> Element<'a, Message> {
         Canvas::new(self)
             .width(width)
             .height(height)
@@ -83,25 +94,39 @@ impl<Message: From<DagMessage>> canvas::Program<Message> for DagCanvas {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<iced::widget::Action<Message>> {
-        if let iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) = event {
-            if let Some(cursor_pos) = cursor.position_in(bounds) {
-                let start_x = 40.0;
-                let start_y = self.pan_y;
+        match event {
+            iced::Event::Mouse(mouse::Event::WheelScrolled { delta }) => {
+                if cursor.position_in(bounds).is_some() {
+                    let dy = match delta {
+                        mouse::ScrollDelta::Lines { y, .. } => *y * 36.0,
+                        mouse::ScrollDelta::Pixels { y, .. } => *y,
+                    };
+                    return Some(iced::widget::Action::publish(
+                        DagMessage::Scrolled(dy).into(),
+                    ));
+                }
+            }
+            iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
+                if let Some(cursor_pos) = cursor.position_in(bounds) {
+                    let start_x = 40.0;
+                    let start_y = self.pan_y;
 
-                for (idx, commit) in self.commits.iter().enumerate() {
-                    let cy = start_y + (idx as f32 * self.row_height * self.zoom);
-                    let row_rect = Rectangle::new(
-                        Point::new(start_x, cy - 18.0 * self.zoom),
-                        Size::new(bounds.width - start_x - 20.0, self.row_height * self.zoom),
-                    );
+                    for (idx, commit) in self.commits.iter().enumerate() {
+                        let cy = start_y + (idx as f32 * self.row_height * self.zoom);
+                        let row_rect = Rectangle::new(
+                            Point::new(start_x, cy - 18.0 * self.zoom),
+                            Size::new(bounds.width - start_x - 20.0, self.row_height * self.zoom),
+                        );
 
-                    if row_rect.contains(cursor_pos) {
-                        return Some(iced::widget::Action::publish(
-                            DagMessage::CommitSelected(commit.short_sha.clone()).into(),
-                        ));
+                        if row_rect.contains(cursor_pos) {
+                            return Some(iced::widget::Action::publish(
+                                DagMessage::CommitSelected(commit.short_sha.clone()).into(),
+                            ));
+                        }
                     }
                 }
             }
+            _ => {}
         }
 
         None

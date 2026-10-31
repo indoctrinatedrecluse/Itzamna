@@ -661,6 +661,10 @@ impl ItzamnaApp {
                         self.bottom_prophecy.push("23:55:00", "☀️", format!("Focused commit kin signet: {}", sha), ProphecyLevel::Solar);
                         Task::none()
                     }
+                    crate::canvas::DagMessage::Scrolled(dy) => {
+                        self.center_loom.dag.pan(dy);
+                        Task::none()
+                    }
                 },
                 CenterLoomMessage::Diff(diff_msg) => match diff_msg {
                     DiffMessage::StageHunk(idx) => {
@@ -1038,6 +1042,20 @@ impl ItzamnaApp {
                     self.center_loom.active_tab = CenterTab::StoneDiff;
                     Task::none()
                 }
+                CenterLoomMessage::SelectParent(sha) => {
+                    self.center_loom.select_sha(&sha);
+                    self.status_bar.head_sha = sha.clone();
+                    if let Some(ref s) = self.sanctuary {
+                        self.center_loom.detailed_commit = s.find_detailed_commit(&sha);
+                    }
+                    self.bottom_prophecy.push("23:55:00", "⬆️", format!("Traversed lineage to parent signet: {}", sha), ProphecyLevel::Jade);
+                    Task::none()
+                }
+                CenterLoomMessage::CloseCommitDetails => {
+                    self.center_loom.selected_commit = None;
+                    self.center_loom.detailed_commit = None;
+                    Task::none()
+                }
             },
             Message::RightAltar(altar_msg) => match altar_msg {
                 RightAltarMessage::ToggleCollapse => {
@@ -1137,6 +1155,18 @@ impl ItzamnaApp {
             Message::Prophecy(p_msg) => match p_msg {
                 ProphecyMessage::ToggleDrawer => {
                     self.bottom_prophecy.is_expanded = !self.bottom_prophecy.is_expanded;
+                    Task::none()
+                }
+                ProphecyMessage::CycleHeight => {
+                    self.bottom_prophecy.height_mode = match self.bottom_prophecy.height_mode {
+                        crate::ui::bottom_prophecy::ProphecyHeight::Minimized => crate::ui::bottom_prophecy::ProphecyHeight::Standard,
+                        crate::ui::bottom_prophecy::ProphecyHeight::Standard => crate::ui::bottom_prophecy::ProphecyHeight::Expanded,
+                        crate::ui::bottom_prophecy::ProphecyHeight::Expanded => crate::ui::bottom_prophecy::ProphecyHeight::Minimized,
+                    };
+                    Task::none()
+                }
+                ProphecyMessage::FilterLevel(lvl) => {
+                    self.bottom_prophecy.active_filter = lvl;
                     Task::none()
                 }
                 ProphecyMessage::ClearFeed => {

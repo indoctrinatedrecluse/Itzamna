@@ -1,7 +1,7 @@
 //! The Center Commit Viewport (El Telar de Yaxche)
 //! Integrates GPU DagCanvas, Stone Diff Workbench, Rebase Crucible, and Oracle Radar.
 
-use iced::widget::{button, column, container, row, text, tooltip, Space};
+use iced::widget::{button, column, container, row, scrollable, text, tooltip, Space};
 use iced::{Alignment, Border, Color, Element, Length, Padding};
 
 use crate::canvas::{DagCanvas, DagMessage};
@@ -11,6 +11,7 @@ use crate::ui::ahau_blame::{AhauBlameWorkbench, BlameMessage};
 use crate::ui::chac_purifier::{ChacPurifierWorkbench, PurifierMessage};
 use crate::ui::diff_workbench::{DiffMessage, DiffWorkbench};
 use crate::ui::kukulcan_merge::{KukulcanMergeWorkbench, MergeMessage};
+use crate::ui::markdown::MayanMarkdown;
 use crate::ui::oracle_radar::{OracleMessage, OracleRadar};
 use crate::ui::overseer_portals::{OverseerPortalsWorkbench, PortalMessage};
 use crate::ui::popol_vuh_log::{PopolLogMessage, PopolVuhLogWorkbench};
@@ -48,6 +49,8 @@ pub enum CenterLoomMessage {
     ZoomOut,
     ResetZoom,
     OpenFileInDiff(String),
+    SelectParent(String),
+    CloseCommitDetails,
 }
 
 pub struct CenterLoom {
@@ -203,12 +206,32 @@ impl CenterLoom {
             CenterTab::YaxcheDag => {
                 let dag_element: Element<'a, Message> = self
                     .dag
-                    .view(1400.0, 750.0)
+                    .view(Length::Fill, Length::Fill)
                     .map(|msg| CenterLoomMessage::Dag(msg).into());
 
                 let inspector = self.render_commit_details();
 
-                column![dag_element, inspector].into()
+                if self.selected_commit.is_some() {
+                    column![
+                        container(dag_element)
+                            .width(Length::Fill)
+                            .height(Length::FillPortion(3)),
+                        inspector,
+                    ]
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .into()
+                } else {
+                    column![
+                        container(dag_element)
+                            .width(Length::Fill)
+                            .height(Length::Fill),
+                        inspector,
+                    ]
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .into()
+                }
             }
             CenterTab::StoneDiff => {
                 self.diff_workbench
@@ -274,83 +297,332 @@ impl CenterLoom {
 
     fn render_commit_details<'a, Message: 'a + From<CenterLoomMessage> + Clone>(&'a self) -> Element<'a, Message> {
         let Some(c) = &self.selected_commit else {
-            return container(row![text("Select a commit from the Yaxche tree to inspect").size(10).color(MayaColors::GLYPH_DIM)])
-                .width(Length::Fill)
-                .padding(Padding::from([6, 12]))
-                .into();
+            return container(
+                row![
+                    text("🔍 Select any commit node in the Yaxche tree to inspect full ancestral metadata, markdown prophecy, and file diffs")
+                        .size(10)
+                        .color(MayaColors::GLYPH_DIM)
+                ]
+                .align_y(Alignment::Center)
+                .padding(Padding::from([4, 12]))
+            )
+            .width(Length::Fill)
+            .height(Length::Fixed(28.0))
+            .style(|_| container::Style {
+                background: Some(Color { a: 0.70, ..MayaColors::OBSIDIAN_BASE }.into()),
+                border: Border {
+                    color: MayaColors::OBSIDIAN_BORDER,
+                    width: 1.0,
+                    radius: 0.0.into(),
+                },
+                ..Default::default()
+            })
+            .into();
         };
 
         let detailed = self.detailed_commit.as_ref();
 
+        // 1. Header Bar: Status, Summary, Author, Time, Churn, and Close
         let header_row = row![
-            text("☀️ KIN:").size(10).color(MayaColors::GLYPH_DIM),
-            text(&c.short_sha).size(11).color(MayaColors::SOLAR_GOLD),
+            container(text(format!("☀️ KIN: {}", c.short_sha)).size(11).color(MayaColors::SOLAR_GOLD))
+                .padding(Padding::from([2, 6]))
+                .style(|_| container::Style {
+                    background: Some(Color { a: 0.25, ..MayaColors::SOLAR_GOLD }.into()),
+                    border: Border { color: MayaColors::SOLAR_GOLD, width: 0.8, radius: 3.0.into() },
+                    ..Default::default()
+                }),
             Space::new().width(8),
-            text(&c.summary).size(11).color(MayaColors::STARLIGHT_WHITE),
+            text(&c.summary).size(12).color(MayaColors::STARLIGHT_WHITE),
             Space::new().width(Length::Fill),
             text(&c.author_name).size(10).color(MayaColors::JADE_GLOW),
-            Space::new().width(8),
+            text(" · ").size(10).color(MayaColors::GLYPH_DIM),
             text(&c.relative_time).size(10).color(MayaColors::GLYPH_DIM),
+            Space::new().width(12),
+            if let Some(det) = detailed {
+                row![
+                    text(format!("+{}", det.total_additions)).size(10).color(MayaColors::JADE_GLOW),
+                    Space::new().width(4),
+                    text(format!("-{}", det.total_deletions)).size(10).color(MayaColors::CINNABAR_BRIGHT),
+                ]
+                .align_y(Alignment::Center)
+            } else {
+                row![]
+            },
+            Space::new().width(12),
+            tooltip(
+                button(text("✕").size(10).color(MayaColors::PARCHMENT_MUTED))
+                    .padding(Padding::from([1, 6]))
+                    .style(|_, status| {
+                        let text_color = match status {
+                            button::Status::Hovered => MayaColors::CINNABAR_BRIGHT,
+                            _ => MayaColors::PARCHMENT_MUTED,
+                        };
+                        button::Style {
+                            background: Some(MayaColors::OBSIDIAN_BASE.into()),
+                            border: Border { color: MayaColors::OBSIDIAN_BORDER, width: 0.8, radius: 2.0.into() },
+                            text_color,
+                            ..Default::default()
+                        }
+                    })
+                    .on_press(CenterLoomMessage::CloseCommitDetails.into()),
+                text("Collapse commit inspector").size(11),
+                tooltip::Position::Top,
+            ),
         ]
+        .padding(Padding::from([4, 10]))
         .align_y(Alignment::Center);
 
-        // If detailed commit is loaded, show changed files list with clickable diff links
-        let files_row = if let Some(det) = detailed {
-            let mut file_buttons = row![
-                text(format!("Changed Files ({}): ", det.changed_files.len())).size(10).color(MayaColors::GLYPH_DIM)
-            ].align_y(Alignment::Center).spacing(4);
+        // 2. Column 1: Ancestral Lineage & ODB Records
+        let mut lineage_col = column![
+            row![
+                text("🏛️ ANCESTRAL LINEAGE").size(9).color(MayaColors::SOLAR_GOLD),
+                Space::new().width(Length::Fill),
+                text("ODB").size(8).color(MayaColors::GLYPH_DIM),
+            ],
+            Space::new().height(2),
+            text(format!("⏰ Exact: {}", detailed.map(|d| d.author_time.as_str()).unwrap_or(&c.relative_time)))
+                .size(9)
+                .color(MayaColors::STARLIGHT_WHITE),
+            text(format!("👤 Author: {}", detailed.map(|d| d.author_name.as_str()).unwrap_or(&c.author_name)))
+                .size(9)
+                .color(MayaColors::JADE_GLOW),
+        ]
+        .spacing(3);
 
-            for f in det.changed_files.iter().take(5) {
-                let status_color = match f.status {
-                    "A" => MayaColors::JADE_GLOW,
-                    "D" => MayaColors::CINNABAR_BRIGHT,
-                    _ => MayaColors::SOLAR_AMBER,
-                };
+        if let Some(d) = detailed {
+            lineage_col = lineage_col.push(
+                text(format!("📧 {}", d.author_email))
+                    .size(8)
+                    .color(MayaColors::GLYPH_DIM)
+            );
+            if d.committer_name != d.author_name {
+                lineage_col = lineage_col.push(
+                    column![
+                        Space::new().height(2),
+                        text(format!("✍️ Committer: {}", d.committer_name)).size(9).color(MayaColors::MAYA_BLUE),
+                        text(format!("📧 {}", d.committer_email)).size(8).color(MayaColors::GLYPH_DIM),
+                    ]
+                );
+            }
+            lineage_col = lineage_col.push(
+                text(format!("🌲 Tree: {}", d.tree_sha))
+                    .size(9)
+                    .color(MayaColors::GLYPH_DIM)
+            );
+            lineage_col = lineage_col.push(Space::new().height(4));
+            lineage_col = lineage_col.push(
+                text("Parent Inscriptions:").size(9).color(MayaColors::SOLAR_AMBER)
+            );
 
-                let path_clone = f.path.clone();
-                let f_btn = tooltip(
-                    button(
+            if d.parent_shas.is_empty() {
+                lineage_col = lineage_col.push(
+                    text("Genesis Altar (Root Commit)").size(8).color(MayaColors::GLYPH_DIM)
+                );
+            } else {
+                for p_sha in &d.parent_shas {
+                    let sha_clone = p_sha.clone();
+                    let p_btn = button(
                         row![
-                            text(f.status).size(9).color(status_color),
-                            Space::new().width(3),
-                            text(&f.path).size(9).color(MayaColors::STARLIGHT_WHITE),
+                            text("⬆️ ").size(9).color(MayaColors::SOLAR_AMBER),
+                            text(p_sha).size(9).color(MayaColors::STARLIGHT_WHITE),
                         ]
                         .align_y(Alignment::Center)
                     )
-                    .padding(Padding::from([1, 5]))
-                    .style(|_theme, _status| button::Style {
-                        background: Some(MayaColors::OBSIDIAN_BASE.into()),
-                        border: Border {
-                            color: MayaColors::OBSIDIAN_BORDER,
-                            width: 1.0,
-                            radius: 2.0.into(),
-                        },
-                        ..Default::default()
+                    .padding(Padding::from([2, 5]))
+                    .style(|_, status| {
+                        let border_color = match status {
+                            button::Status::Hovered => MayaColors::SOLAR_GOLD,
+                            _ => MayaColors::OBSIDIAN_BORDER,
+                        };
+                        button::Style {
+                            background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
+                            border: Border { color: border_color, width: 0.8, radius: 2.0.into() },
+                            ..Default::default()
+                        }
                     })
-                    .on_press(CenterLoomMessage::OpenFileInDiff(path_clone).into()),
-                    text("Inspect file diff in Etz'nab' Stone Diff (git diff)").size(11),
-                    tooltip::Position::Top,
-                );
+                    .on_press(CenterLoomMessage::SelectParent(sha_clone).into());
 
-                file_buttons = file_buttons.push(f_btn);
+                    lineage_col = lineage_col.push(p_btn);
+                }
             }
+        }
 
-            file_buttons
+        let col1 = container(
+            scrollable(lineage_col.padding(Padding::from([6, 8]))).height(Length::Fill)
+        )
+        .width(Length::Fixed(240.0))
+        .height(Length::Fill)
+        .style(|_| container::Style {
+            background: Some(Color { a: 0.65, ..MayaColors::OBSIDIAN_BASE }.into()),
+            border: Border {
+                color: MayaColors::OBSIDIAN_BORDER,
+                width: 1.0,
+                radius: 3.0.into(),
+            },
+            ..Default::default()
+        });
+
+        // 3. Column 2: Auto-Parsed Mayan Markdown Inscription
+        let full_msg = detailed.map(|d| d.full_message.as_str()).unwrap_or(&c.summary);
+        let markdown_content = MayanMarkdown::render(full_msg);
+
+        let col2 = container(
+            column![
+                row![
+                    text("📜 SACRED INSCRIPTION & PROPHETIC RECORD").size(9).color(MayaColors::SOLAR_GOLD),
+                    Space::new().width(Length::Fill),
+                    text("Auto-Parsed Markdown").size(8).color(MayaColors::JADE_GLOW),
+                ]
+                .padding(Padding::from([4, 8])),
+                scrollable(
+                    container(markdown_content)
+                        .padding(Padding::from([4, 10]))
+                        .width(Length::Fill)
+                )
+                .height(Length::Fill),
+            ]
+        )
+        .width(Length::FillPortion(4))
+        .height(Length::Fill)
+        .style(|_| container::Style {
+            background: Some(Color { a: 0.75, ..MayaColors::OBSIDIAN_BASE }.into()),
+            border: Border {
+                color: MayaColors::OBSIDIAN_BORDER,
+                width: 1.0,
+                radius: 3.0.into(),
+            },
+            ..Default::default()
+        });
+
+        // 4. Column 3: Complete Changed Files Codex
+        let mut files_column = column![].spacing(3).padding(Padding::from([4, 6]));
+
+        if let Some(det) = detailed {
+            if det.changed_files.is_empty() {
+                files_column = files_column.push(
+                    text("No file modifications recorded in this commit").size(9).color(MayaColors::GLYPH_DIM)
+                );
+            } else {
+                for f in &det.changed_files {
+                    let (status_color, status_bg) = match f.status {
+                        "A" => (MayaColors::JADE_GLOW, Color { a: 0.2, ..MayaColors::JADE_GLOW }),
+                        "D" => (MayaColors::CINNABAR_BRIGHT, Color { a: 0.2, ..MayaColors::CINNABAR_BRIGHT }),
+                        "R" => (MayaColors::MAYA_BLUE, Color { a: 0.2, ..MayaColors::MAYA_BLUE }),
+                        _ => (MayaColors::SOLAR_AMBER, Color { a: 0.2, ..MayaColors::SOLAR_AMBER }),
+                    };
+
+                    let path_clone = f.path.clone();
+                    let f_row = row![
+                        container(text(f.status).size(8).color(status_color))
+                            .padding(Padding::from([1, 4]))
+                            .style(move |_| container::Style {
+                                background: Some(status_bg.into()),
+                                border: Border { color: status_color, width: 0.5, radius: 2.0.into() },
+                                ..Default::default()
+                            }),
+                        Space::new().width(6),
+                        text(&f.path)
+                            .size(9)
+                            .color(MayaColors::STARLIGHT_WHITE)
+                            .width(Length::Fill),
+                        Space::new().width(4),
+                        text(format!("+{}", f.additions)).size(8).color(MayaColors::JADE_GLOW),
+                        Space::new().width(2),
+                        text(format!("-{}", f.deletions)).size(8).color(MayaColors::CINNABAR_BRIGHT),
+                        Space::new().width(6),
+                        tooltip(
+                            button(text("DIFF ➔").size(8).color(MayaColors::SOLAR_GOLD))
+                                .padding(Padding::from([1, 5]))
+                                .style(|_, status| {
+                                    let border_color = match status {
+                                        button::Status::Hovered => MayaColors::SOLAR_GOLD,
+                                        _ => MayaColors::OBSIDIAN_BORDER,
+                                    };
+                                    button::Style {
+                                        background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
+                                        border: Border { color: border_color, width: 0.8, radius: 2.0.into() },
+                                        ..Default::default()
+                                    }
+                                })
+                                .on_press(CenterLoomMessage::OpenFileInDiff(path_clone).into()),
+                            text("Inspect file diff in Etz'nab' Stone Diff (git diff)").size(10),
+                            tooltip::Position::Top,
+                        ),
+                    ]
+                    .padding(Padding::from([2, 4]))
+                    .align_y(Alignment::Center);
+
+                    files_column = files_column.push(
+                        container(f_row)
+                            .width(Length::Fill)
+                            .style(|_| container::Style {
+                                background: Some(Color { a: 0.2, ..MayaColors::OBSIDIAN_SURFACE }.into()),
+                                border: Border { radius: 2.0.into(), ..Default::default() },
+                                ..Default::default()
+                            })
+                    );
+                }
+            }
         } else {
-            row![text("Inspecting ODB tree...").size(9).color(MayaColors::GLYPH_DIM)].align_y(Alignment::Center)
-        };
+            files_column = files_column.push(
+                text("Retrieving ODB diff tree...").size(9).color(MayaColors::GLYPH_DIM)
+            );
+        }
+
+        let col3 = container(
+            column![
+                row![
+                    text("🏺 ALTERED RELICS & TREE DELTAS").size(9).color(MayaColors::SOLAR_GOLD),
+                    Space::new().width(Length::Fill),
+                    text(format!("{} files", detailed.map(|d| d.changed_files.len()).unwrap_or(0))).size(8).color(MayaColors::GLYPH_DIM),
+                ]
+                .padding(Padding::from([4, 8])),
+                scrollable(files_column).height(Length::Fill),
+            ]
+        )
+        .width(Length::FillPortion(3))
+        .height(Length::Fill)
+        .style(|_| container::Style {
+            background: Some(Color { a: 0.65, ..MayaColors::OBSIDIAN_BASE }.into()),
+            border: Border {
+                color: MayaColors::OBSIDIAN_BORDER,
+                width: 1.0,
+                radius: 3.0.into(),
+            },
+            ..Default::default()
+        });
+
+        let columns_row = row![
+            col1,
+            col2,
+            col3,
+        ]
+        .spacing(6)
+        .width(Length::Fill)
+        .height(Length::Fill);
 
         let content = column![
             header_row,
-            Space::new().height(4),
-            files_row,
+            container(Space::new())
+                .width(Length::Fill)
+                .height(1)
+                .style(|_| container::Style {
+                    background: Some(MayaColors::OBSIDIAN_BORDER.into()),
+                    ..Default::default()
+                }),
+            container(columns_row)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .padding(Padding::from([4, 8])),
         ]
-        .padding(Padding::from([6, 12]));
+        .width(Length::Fill)
+        .height(Length::Fill);
 
         container(content)
             .width(Length::Fill)
+            .height(Length::FillPortion(2))
             .style(|_theme| container::Style {
-                background: Some(Color { a: 0.92, ..MayaColors::OBSIDIAN_SURFACE }.into()),
+                background: Some(Color { a: 0.94, ..MayaColors::OBSIDIAN_SURFACE }.into()),
                 border: Border {
                     color: MayaColors::OBSIDIAN_BORDER,
                     width: 1.0,
