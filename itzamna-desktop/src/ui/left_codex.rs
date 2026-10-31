@@ -1,7 +1,7 @@
 //! The Left Codex (El Códice)
 //! Hierarchical sidebar managing real branches (Yaxche), tags (Lamat), stashes (Ak'bal), and remotes.
 
-use iced::widget::{button, column, container, row, scrollable, text, text_input, Space};
+use iced::widget::{button, column, container, row, scrollable, text, text_input, tooltip, Space};
 use iced::{Alignment, Border, Color, Element, Length, Padding};
 
 use crate::theme::MayaColors;
@@ -142,13 +142,17 @@ impl LeftCodex {
                 .size(10)
                 .color(MayaColors::JADE_GLOW),
             Space::new().width(Length::Fill),
-            button(text("+").size(11).color(MayaColors::JADE_GLOW))
-                .padding(Padding::from([0, 4]))
-                .style(|_theme, _status| button::Style {
-                    background: Some(Color::TRANSPARENT.into()),
-                    ..Default::default()
-                })
-                .on_press(LeftCodexMessage::ToggleBranchInput.into()),
+            tooltip(
+                button(text("+").size(11).color(MayaColors::JADE_GLOW))
+                    .padding(Padding::from([0, 4]))
+                    .style(|_theme, _status| button::Style {
+                        background: Some(Color::TRANSPARENT.into()),
+                        ..Default::default()
+                    })
+                    .on_press(LeftCodexMessage::ToggleBranchInput.into()),
+                text("Sprout a new Git branch at current HEAD (git branch <name>)").size(11),
+                tooltip::Position::Right,
+            ),
         ]
         .align_y(Alignment::Center);
 
@@ -161,9 +165,13 @@ impl LeftCodex {
                     .size(10)
                     .padding(Padding::from([3, 6]))
                     .on_input(|val| LeftCodexMessage::NewBranchNameChanged(val).into()),
-                button(text("✓").size(10).color(MayaColors::JADE_GLOW))
-                    .padding(Padding::from([2, 5]))
-                    .on_press(LeftCodexMessage::ConfirmSproutBranch.into()),
+                tooltip(
+                    button(text("✓").size(10).color(MayaColors::JADE_GLOW))
+                        .padding(Padding::from([2, 5]))
+                        .on_press(LeftCodexMessage::ConfirmSproutBranch.into()),
+                    text("Confirm branch creation (git branch)").size(11),
+                    tooltip::Position::Top,
+                ),
             ]
             .align_y(Alignment::Center)
             .spacing(4);
@@ -180,35 +188,39 @@ impl LeftCodex {
                 MayaColors::STARLIGHT_WHITE
             };
 
-            let item = button(
-                row![
-                    text(icon).size(11),
-                    text(branch).size(11).color(color),
-                ]
-                .align_y(Alignment::Center)
-            )
-            .width(Length::Fill)
-            .padding(Padding::from([3, 6]))
-            .style(move |_theme, status| {
-                let bg = if is_active {
-                    Color { a: 0.35, ..MayaColors::OBSIDIAN_SURFACE }
-                } else {
-                    match status {
-                        button::Status::Hovered => Color { a: 0.20, ..MayaColors::OBSIDIAN_SURFACE },
-                        _ => Color::TRANSPARENT,
+            let item = tooltip(
+                button(
+                    row![
+                        text(icon).size(11),
+                        text(branch).size(11).color(color),
+                    ]
+                    .align_y(Alignment::Center)
+                )
+                .width(Length::Fill)
+                .padding(Padding::from([3, 6]))
+                .style(move |_theme, status| {
+                    let bg = if is_active {
+                        Color { a: 0.35, ..MayaColors::OBSIDIAN_SURFACE }
+                    } else {
+                        match status {
+                            button::Status::Hovered => Color { a: 0.20, ..MayaColors::OBSIDIAN_SURFACE },
+                            _ => Color::TRANSPARENT,
+                        }
+                    };
+                    button::Style {
+                        background: Some(bg.into()),
+                        border: Border {
+                            color: if is_active { MayaColors::JADE_SHADOW } else { Color::TRANSPARENT },
+                            width: 1.0,
+                            radius: 3.0.into(),
+                        },
+                        ..Default::default()
                     }
-                };
-                button::Style {
-                    background: Some(bg.into()),
-                    border: Border {
-                        color: if is_active { MayaColors::JADE_SHADOW } else { Color::TRANSPARENT },
-                        width: 1.0,
-                        radius: 3.0.into(),
-                    },
-                    ..Default::default()
-                }
-            })
-            .on_press(LeftCodexMessage::SelectBranch(branch.clone()).into());
+                })
+                .on_press(LeftCodexMessage::SelectBranch(branch.clone()).into()),
+                text(if is_active { "Active branch (HEAD)" } else { "Switch active branch (git switch / checkout)" }).size(11),
+                tooltip::Position::Right,
+            );
 
             branch_items = branch_items.push(item);
         }
@@ -224,32 +236,40 @@ impl LeftCodex {
                 .size(10)
                 .color(MayaColors::MAYA_BLUE),
             Space::new().width(Length::Fill),
-            button(text("⚡").size(10).color(MayaColors::MAYA_BLUE))
-                .padding(Padding::from([0, 4]))
-                .style(|_theme, _status| button::Style {
-                    background: Some(Color::TRANSPARENT.into()),
-                    ..Default::default()
-                })
-                .on_press(LeftCodexMessage::FetchRemote.into()),
+            tooltip(
+                button(text("⚡").size(10).color(MayaColors::MAYA_BLUE))
+                    .padding(Padding::from([0, 4]))
+                    .style(|_theme, _status| button::Style {
+                        background: Some(Color::TRANSPARENT.into()),
+                        ..Default::default()
+                    })
+                    .on_press(LeftCodexMessage::FetchRemote.into()),
+                text("Fetch remote tracking refs and objects (git fetch --all)").size(11),
+                tooltip::Position::Right,
+            ),
         ]
         .align_y(Alignment::Center);
 
         let mut remote_items = column![section_title].spacing(2);
 
         for remote in &self.remote_branches {
-            let item = button(
-                row![
-                    text("☁️ ").size(10),
-                    text(remote).size(10).color(MayaColors::PARCHMENT_MUTED),
-                ]
-                .align_y(Alignment::Center)
-            )
-            .width(Length::Fill)
-            .padding(Padding::from([2, 6]))
-            .style(|_theme, _status| button::Style {
-                background: Some(Color::TRANSPARENT.into()),
-                ..Default::default()
-            });
+            let item = tooltip(
+                button(
+                    row![
+                        text("☁️ ").size(10),
+                        text(remote).size(10).color(MayaColors::PARCHMENT_MUTED),
+                    ]
+                    .align_y(Alignment::Center)
+                )
+                .width(Length::Fill)
+                .padding(Padding::from([2, 6]))
+                .style(|_theme, _status| button::Style {
+                    background: Some(Color::TRANSPARENT.into()),
+                    ..Default::default()
+                }),
+                text("Remote tracking branch reference").size(11),
+                tooltip::Position::Right,
+            );
 
             remote_items = remote_items.push(item);
         }
@@ -265,13 +285,17 @@ impl LeftCodex {
                 .size(10)
                 .color(MayaColors::SOLAR_AMBER),
             Space::new().width(Length::Fill),
-            button(text("+").size(10).color(MayaColors::SOLAR_AMBER))
-                .padding(Padding::from([0, 4]))
-                .style(|_theme, _status| button::Style {
-                    background: Some(Color::TRANSPARENT.into()),
-                    ..Default::default()
-                })
-                .on_press(LeftCodexMessage::ToggleTagInput.into()),
+            tooltip(
+                button(text("+").size(10).color(MayaColors::SOLAR_AMBER))
+                    .padding(Padding::from([0, 4]))
+                    .style(|_theme, _status| button::Style {
+                        background: Some(Color::TRANSPARENT.into()),
+                        ..Default::default()
+                    })
+                    .on_press(LeftCodexMessage::ToggleTagInput.into()),
+                text("Inscribe a new tag at current commit (git tag <name>)").size(11),
+                tooltip::Position::Right,
+            ),
         ]
         .align_y(Alignment::Center);
 
@@ -283,9 +307,13 @@ impl LeftCodex {
                     .size(10)
                     .padding(Padding::from([3, 6]))
                     .on_input(|val| LeftCodexMessage::NewTagNameChanged(val).into()),
-                button(text("✓").size(10).color(MayaColors::SOLAR_AMBER))
-                    .padding(Padding::from([2, 5]))
-                    .on_press(LeftCodexMessage::ConfirmCreateTag.into()),
+                tooltip(
+                    button(text("✓").size(10).color(MayaColors::SOLAR_AMBER))
+                        .padding(Padding::from([2, 5]))
+                        .on_press(LeftCodexMessage::ConfirmCreateTag.into()),
+                    text("Confirm tag creation (git tag)").size(11),
+                    tooltip::Position::Top,
+                ),
             ]
             .align_y(Alignment::Center)
             .spacing(4);
@@ -294,20 +322,24 @@ impl LeftCodex {
         }
 
         for tag in &self.tags {
-            let item = button(
-                row![
-                    text("⭐ ").size(10),
-                    text(tag).size(10).color(MayaColors::PARCHMENT_MUTED),
-                ]
-                .align_y(Alignment::Center)
-            )
-            .width(Length::Fill)
-            .padding(Padding::from([2, 6]))
-            .style(|_theme, _status| button::Style {
-                background: Some(Color::TRANSPARENT.into()),
-                ..Default::default()
-            })
-            .on_press(LeftCodexMessage::SelectTag(tag.clone()).into());
+            let item = tooltip(
+                button(
+                    row![
+                        text("⭐ ").size(10),
+                        text(tag).size(10).color(MayaColors::PARCHMENT_MUTED),
+                    ]
+                    .align_y(Alignment::Center)
+                )
+                .width(Length::Fill)
+                .padding(Padding::from([2, 6]))
+                .style(|_theme, _status| button::Style {
+                    background: Some(Color::TRANSPARENT.into()),
+                    ..Default::default()
+                })
+                .on_press(LeftCodexMessage::SelectTag(tag.clone()).into()),
+                text("Inspect tagged commit snapshot (git show <tag>)").size(11),
+                tooltip::Position::Right,
+            );
 
             tag_items = tag_items.push(item);
         }
@@ -323,33 +355,41 @@ impl LeftCodex {
                 .size(10)
                 .color(MayaColors::CINNABAR_BRIGHT),
             Space::new().width(Length::Fill),
-            button(text("+").size(11).color(MayaColors::CINNABAR_BRIGHT))
-                .padding(Padding::from([0, 4]))
-                .style(|_theme, _status| button::Style {
-                    background: Some(Color::TRANSPARENT.into()),
-                    ..Default::default()
-                })
-                .on_press(LeftCodexMessage::CreateStash.into()),
+            tooltip(
+                button(text("+").size(11).color(MayaColors::CINNABAR_BRIGHT))
+                    .padding(Padding::from([0, 4]))
+                    .style(|_theme, _status| button::Style {
+                        background: Some(Color::TRANSPARENT.into()),
+                        ..Default::default()
+                    })
+                    .on_press(LeftCodexMessage::CreateStash.into()),
+                text("Stash dirty working tree modifications (git stash push)").size(11),
+                tooltip::Position::Right,
+            ),
         ]
         .align_y(Alignment::Center);
 
         let mut stash_items = column![section_title].spacing(2);
 
         for (idx, stash) in self.stashes.iter().enumerate() {
-            let item = button(
-                row![
-                    text("🔒 ").size(10),
-                    text(stash).size(10).color(MayaColors::PARCHMENT_MUTED),
-                ]
-                .align_y(Alignment::Center)
-            )
-            .width(Length::Fill)
-            .padding(Padding::from([2, 6]))
-            .style(|_theme, _status| button::Style {
-                background: Some(Color::TRANSPARENT.into()),
-                ..Default::default()
-            })
-            .on_press(LeftCodexMessage::SelectStash(idx).into());
+            let item = tooltip(
+                button(
+                    row![
+                        text("🔒 ").size(10),
+                        text(stash).size(10).color(MayaColors::PARCHMENT_MUTED),
+                    ]
+                    .align_y(Alignment::Center)
+                )
+                .width(Length::Fill)
+                .padding(Padding::from([2, 6]))
+                .style(|_theme, _status| button::Style {
+                    background: Some(Color::TRANSPARENT.into()),
+                    ..Default::default()
+                })
+                .on_press(LeftCodexMessage::SelectStash(idx).into()),
+                text("Inspect stashed changes state (git stash show)").size(11),
+                tooltip::Position::Right,
+            );
 
             stash_items = stash_items.push(item);
         }

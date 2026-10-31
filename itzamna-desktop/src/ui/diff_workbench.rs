@@ -1,7 +1,7 @@
 //! The Carved Stone Diff Workbench (El Banco de Trabajo de Diferencias)
 //! Intra-line syntax-highlighted diffs with surgical hunk-level staging.
 
-use iced::widget::{button, column, container, row, scrollable, text, Space};
+use iced::widget::{button, column, container, row, scrollable, text, tooltip, Space};
 use iced::{Alignment, Border, Color, Element, Length, Padding};
 
 use crate::git::{DiffHunk, DiffLine, DiffLineTag, FileDiff};
@@ -59,31 +59,39 @@ impl DiffWorkbench {
             text("🔪 ETZ'NAB' STONE DIFF:").size(11).color(MayaColors::SOLAR_GOLD),
             text(format!(" {}", self.file_path)).size(11).color(MayaColors::STARLIGHT_WHITE),
             Space::new().width(Length::Fill),
-            button(text("Stage File +").size(10).color(MayaColors::JADE_GLOW))
-                .padding(Padding::from([2, 8]))
-                .style(|_theme, _status| button::Style {
-                    background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
-                    border: Border {
-                        color: MayaColors::JADE_SHADOW,
-                        width: 1.0,
-                        radius: 3.0.into(),
-                    },
-                    ..Default::default()
-                })
-                .on_press(DiffMessage::StageEntireFile.into()),
+            tooltip(
+                button(text("Stage File +").size(10).color(MayaColors::JADE_GLOW))
+                    .padding(Padding::from([2, 8]))
+                    .style(|_theme, _status| button::Style {
+                        background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
+                        border: Border {
+                            color: MayaColors::JADE_SHADOW,
+                            width: 1.0,
+                            radius: 3.0.into(),
+                        },
+                        ..Default::default()
+                    })
+                    .on_press(DiffMessage::StageEntireFile.into()),
+                text("Stage all modifications in this file (git add <file>)").size(11),
+                tooltip::Position::Bottom,
+            ),
             Space::new().width(6),
-            button(text("✕ Close").size(10).color(MayaColors::PARCHMENT_MUTED))
-                .padding(Padding::from([2, 8]))
-                .style(|_theme, _status| button::Style {
-                    background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
-                    border: Border {
-                        color: MayaColors::OBSIDIAN_BORDER,
-                        width: 1.0,
-                        radius: 3.0.into(),
-                    },
-                    ..Default::default()
-                })
-                .on_press(DiffMessage::CloseDiff.into()),
+            tooltip(
+                button(text("✕ Close").size(10).color(MayaColors::PARCHMENT_MUTED))
+                    .padding(Padding::from([2, 8]))
+                    .style(|_theme, _status| button::Style {
+                        background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
+                        border: Border {
+                            color: MayaColors::OBSIDIAN_BORDER,
+                            width: 1.0,
+                            radius: 3.0.into(),
+                        },
+                        ..Default::default()
+                    })
+                    .on_press(DiffMessage::CloseDiff.into()),
+                text("Close diff view and return to commit DAG").size(11),
+                tooltip::Position::Bottom,
+            ),
         ]
         .padding(Padding::from([6, 12]))
         .align_y(Alignment::Center);
@@ -128,18 +136,22 @@ impl DiffWorkbench {
         let hunk_header = row![
             text(&hunk.header).size(10).color(MayaColors::SOLAR_AMBER),
             Space::new().width(Length::Fill),
-            button(text("Stage Hunk +").size(10).color(MayaColors::JADE_GLOW))
-                .padding(Padding::from([1, 6]))
-                .style(|_theme, _status| button::Style {
-                    background: Some(Color { a: 0.4, ..MayaColors::JADE_SHADOW }.into()),
-                    border: Border {
-                        color: MayaColors::JADE_GLOW,
-                        width: 1.0,
-                        radius: 3.0.into(),
-                    },
-                    ..Default::default()
-                })
-                .on_press(DiffMessage::StageHunk(hunk_idx).into()),
+            tooltip(
+                button(text("Stage Hunk +").size(10).color(MayaColors::JADE_GLOW))
+                    .padding(Padding::from([1, 6]))
+                    .style(|_theme, _status| button::Style {
+                        background: Some(Color { a: 0.4, ..MayaColors::JADE_SHADOW }.into()),
+                        border: Border {
+                            color: MayaColors::JADE_GLOW,
+                            width: 1.0,
+                            radius: 3.0.into(),
+                        },
+                        ..Default::default()
+                    })
+                    .on_press(DiffMessage::StageHunk(hunk_idx).into()),
+                text("Surgically stage this modification block into the index (git add -p)").size(11),
+                tooltip::Position::Left,
+            ),
         ]
         .padding(Padding::from([4, 8]))
         .align_y(Alignment::Center);

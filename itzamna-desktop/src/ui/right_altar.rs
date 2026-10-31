@@ -1,7 +1,7 @@
 //! The Right Altar (El Altar de Creación)
 //! Staging workbench (Unstaged vs Staged offerings) and the Inscription Chamber (Commit).
 
-use iced::widget::{button, column, container, row, scrollable, text, text_input, Space};
+use iced::widget::{button, column, container, row, scrollable, text, text_input, tooltip, Space};
 use iced::{Alignment, Border, Color, Element, Length, Padding};
 
 use crate::theme::MayaColors;
@@ -136,18 +136,22 @@ impl RightAltar {
                 .size(10)
                 .color(MayaColors::GLYPH_DIM),
             Space::new().width(Length::Fill),
-            button(text("Stage All +").size(10).color(MayaColors::JADE_GLOW))
-                .padding(Padding::from([1, 6]))
-                .style(|_theme, _status| button::Style {
-                    background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
-                    border: Border {
-                        color: MayaColors::JADE_SHADOW,
-                        width: 1.0,
-                        radius: 3.0.into(),
-                    },
-                    ..Default::default()
-                })
-                .on_press(RightAltarMessage::StageAll.into()),
+            tooltip(
+                button(text("Stage All +").size(10).color(MayaColors::JADE_GLOW))
+                    .padding(Padding::from([1, 6]))
+                    .style(|_theme, _status| button::Style {
+                        background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
+                        border: Border {
+                            color: MayaColors::JADE_SHADOW,
+                            width: 1.0,
+                            radius: 3.0.into(),
+                        },
+                        ..Default::default()
+                    })
+                    .on_press(RightAltarMessage::StageAll.into()),
+                text("Stage all modified and untracked files into the index (git add -A)").size(11),
+                tooltip::Position::Top,
+            ),
         ]
         .align_y(Alignment::Center);
 
@@ -165,33 +169,41 @@ impl RightAltar {
             };
 
             let path_for_diff = file.path.clone();
-            let file_link = button(
-                row![
-                    text(file.status).size(10).color(status_color),
-                    Space::new().width(6),
-                    text(&file.path)
-                        .size(11)
-                        .color(MayaColors::STARLIGHT_WHITE),
-                ]
-                .align_y(Alignment::Center)
-            )
-            .padding(Padding::from([1, 4]))
-            .style(|_theme, _status| button::Style {
-                background: Some(Color::TRANSPARENT.into()),
-                ..Default::default()
-            })
-            .on_press(RightAltarMessage::OpenFileDiff(path_for_diff).into());
+            let file_link = tooltip(
+                button(
+                    row![
+                        text(file.status).size(10).color(status_color),
+                        Space::new().width(6),
+                        text(&file.path)
+                            .size(11)
+                            .color(MayaColors::STARLIGHT_WHITE),
+                    ]
+                    .align_y(Alignment::Center)
+                )
+                .padding(Padding::from([1, 4]))
+                .style(|_theme, _status| button::Style {
+                    background: Some(Color::TRANSPARENT.into()),
+                    ..Default::default()
+                })
+                .on_press(RightAltarMessage::OpenFileDiff(path_for_diff).into()),
+                text("Inspect file diff in Etz'nab' Stone Diff workbench (git diff)").size(11),
+                tooltip::Position::Top,
+            );
 
             let row_item = row![
                 file_link,
                 Space::new().width(Length::Fill),
-                button(text("+").size(11).color(MayaColors::JADE_GLOW))
-                    .padding(Padding::from([0, 5]))
-                    .style(|_theme, _status| button::Style {
-                        background: Some(Color::TRANSPARENT.into()),
-                        ..Default::default()
-                    })
-                    .on_press(RightAltarMessage::StageFile(file.path.clone()).into()),
+                tooltip(
+                    button(text("+").size(11).color(MayaColors::JADE_GLOW))
+                        .padding(Padding::from([0, 5]))
+                        .style(|_theme, _status| button::Style {
+                            background: Some(Color::TRANSPARENT.into()),
+                            ..Default::default()
+                        })
+                        .on_press(RightAltarMessage::StageFile(file.path.clone()).into()),
+                    text("Stage file into index (git add)").size(11),
+                    tooltip::Position::Left,
+                ),
             ]
             .padding(Padding::from([2, 4]))
             .align_y(Alignment::Center);
@@ -214,18 +226,22 @@ impl RightAltar {
                 .size(10)
                 .color(MayaColors::GLYPH_DIM),
             Space::new().width(Length::Fill),
-            button(text("Unstage All -").size(10).color(MayaColors::CINNABAR_BRIGHT))
-                .padding(Padding::from([1, 6]))
-                .style(|_theme, _status| button::Style {
-                    background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
-                    border: Border {
-                        color: MayaColors::OBSIDIAN_BORDER,
-                        width: 1.0,
-                        radius: 3.0.into(),
-                    },
-                    ..Default::default()
-                })
-                .on_press(RightAltarMessage::UnstageAll.into()),
+            tooltip(
+                button(text("Unstage All -").size(10).color(MayaColors::CINNABAR_BRIGHT))
+                    .padding(Padding::from([1, 6]))
+                    .style(|_theme, _status| button::Style {
+                        background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
+                        border: Border {
+                            color: MayaColors::OBSIDIAN_BORDER,
+                            width: 1.0,
+                            radius: 3.0.into(),
+                        },
+                        ..Default::default()
+                    })
+                    .on_press(RightAltarMessage::UnstageAll.into()),
+                text("Unstage all staged files from index (git reset HEAD)").size(11),
+                tooltip::Position::Top,
+            ),
         ]
         .align_y(Alignment::Center);
 
@@ -237,33 +253,41 @@ impl RightAltar {
 
         for file in &self.staged_files {
             let path_for_diff = file.path.clone();
-            let file_link = button(
-                row![
-                    text(file.status).size(10).color(MayaColors::JADE_GLOW),
-                    Space::new().width(6),
-                    text(&file.path)
-                        .size(11)
-                        .color(MayaColors::STARLIGHT_WHITE),
-                ]
-                .align_y(Alignment::Center)
-            )
-            .padding(Padding::from([1, 4]))
-            .style(|_theme, _status| button::Style {
-                background: Some(Color::TRANSPARENT.into()),
-                ..Default::default()
-            })
-            .on_press(RightAltarMessage::OpenFileDiff(path_for_diff).into());
+            let file_link = tooltip(
+                button(
+                    row![
+                        text(file.status).size(10).color(MayaColors::JADE_GLOW),
+                        Space::new().width(6),
+                        text(&file.path)
+                            .size(11)
+                            .color(MayaColors::STARLIGHT_WHITE),
+                    ]
+                    .align_y(Alignment::Center)
+                )
+                .padding(Padding::from([1, 4]))
+                .style(|_theme, _status| button::Style {
+                    background: Some(Color::TRANSPARENT.into()),
+                    ..Default::default()
+                })
+                .on_press(RightAltarMessage::OpenFileDiff(path_for_diff).into()),
+                text("Inspect file diff in Etz'nab' Stone Diff workbench (git diff)").size(11),
+                tooltip::Position::Top,
+            );
 
             let row_item = row![
                 file_link,
                 Space::new().width(Length::Fill),
-                button(text("-").size(11).color(MayaColors::CINNABAR_BRIGHT))
-                    .padding(Padding::from([0, 5]))
-                    .style(|_theme, _status| button::Style {
-                        background: Some(Color::TRANSPARENT.into()),
-                        ..Default::default()
-                    })
-                    .on_press(RightAltarMessage::UnstageFile(file.path.clone()).into()),
+                tooltip(
+                    button(text("-").size(11).color(MayaColors::CINNABAR_BRIGHT))
+                        .padding(Padding::from([0, 5]))
+                        .style(|_theme, _status| button::Style {
+                            background: Some(Color::TRANSPARENT.into()),
+                            ..Default::default()
+                        })
+                        .on_press(RightAltarMessage::UnstageFile(file.path.clone()).into()),
+                    text("Unstage file from index (git restore --staged)").size(11),
+                    tooltip::Position::Left,
+                ),
             ]
             .padding(Padding::from([2, 4]))
             .align_y(Alignment::Center);
@@ -322,31 +346,35 @@ impl RightAltar {
             })
             .on_input(|val| RightAltarMessage::CommitDescriptionChanged(val).into());
 
-        let commit_button = button(
-            row![
-                text("🔥 SEAL & INSCRIBE").size(11).color(MayaColors::OBSIDIAN_VOID),
-                text(" (COMMIT)").size(9).color(Color { a: 0.8, ..MayaColors::OBSIDIAN_VOID }),
-            ]
-            .align_y(Alignment::Center)
-        )
-        .width(Length::Fill)
-        .padding(Padding::from([9, 14]))
-        .style(|_theme, status| {
-            let bg = match status {
-                button::Status::Hovered => MayaColors::SOLAR_GOLD,
-                _ => MayaColors::SOLAR_AMBER,
-            };
-            button::Style {
-                background: Some(bg.into()),
-                border: Border {
-                    color: MayaColors::SOLAR_GOLD,
-                    width: 1.0,
-                    radius: 4.0.into(),
-                },
-                ..Default::default()
-            }
-        })
-        .on_press(RightAltarMessage::InscribeCommit.into());
+        let commit_button = tooltip(
+            button(
+                row![
+                    text("🔥 SEAL & INSCRIBE").size(11).color(MayaColors::OBSIDIAN_VOID),
+                    text(" (COMMIT)").size(9).color(Color { a: 0.8, ..MayaColors::OBSIDIAN_VOID }),
+                ]
+                .align_y(Alignment::Center)
+            )
+            .width(Length::Fill)
+            .padding(Padding::from([9, 14]))
+            .style(|_theme, status| {
+                let bg = match status {
+                    button::Status::Hovered => MayaColors::SOLAR_GOLD,
+                    _ => MayaColors::SOLAR_AMBER,
+                };
+                button::Style {
+                    background: Some(bg.into()),
+                    border: Border {
+                        color: MayaColors::SOLAR_GOLD,
+                        width: 1.0,
+                        radius: 4.0.into(),
+                    },
+                    ..Default::default()
+                }
+            })
+            .on_press(RightAltarMessage::InscribeCommit.into()),
+            text("Inscribe staged files into a permanent Git commit (git commit -m)").size(11),
+            tooltip::Position::Top,
+        );
 
         container(
             column![

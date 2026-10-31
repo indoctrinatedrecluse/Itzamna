@@ -1,7 +1,7 @@
 //! The K'uk'ulkan Rebase & Conflict Crucible (El Crisol de Rebase y Conflictos)
 //! Visual interactive rebase sequencer and 3-way merge conflict resolver.
 
-use iced::widget::{button, column, container, row, scrollable, text, text_input, Space};
+use iced::widget::{button, column, container, row, scrollable, text, text_input, tooltip, Space};
 use iced::{Alignment, Border, Color, Element, Length, Padding};
 
 use crate::theme::MayaColors;
@@ -94,18 +94,22 @@ impl RebaseCrucible {
                 .size(10)
                 .color(MayaColors::GLYPH_DIM),
             Space::new().width(Length::Fill),
-            button(text("🔥 EXECUTE REBASE").size(10).color(MayaColors::OBSIDIAN_VOID))
-                .padding(Padding::from([3, 10]))
-                .style(|_theme, _status| button::Style {
-                    background: Some(MayaColors::SOLAR_GOLD.into()),
-                    border: Border {
-                        color: MayaColors::SOLAR_AMBER,
-                        width: 1.0,
-                        radius: 3.0.into(),
-                    },
-                    ..Default::default()
-                })
-                .on_press(RebaseMessage::ExecuteRebase.into()),
+            tooltip(
+                button(text("🔥 EXECUTE REBASE").size(10).color(MayaColors::OBSIDIAN_VOID))
+                    .padding(Padding::from([3, 10]))
+                    .style(|_theme, _status| button::Style {
+                        background: Some(MayaColors::SOLAR_GOLD.into()),
+                        border: Border {
+                            color: MayaColors::SOLAR_AMBER,
+                            width: 1.0,
+                            radius: 3.0.into(),
+                        },
+                        ..Default::default()
+                    })
+                    .on_press(RebaseMessage::ExecuteRebase.into()),
+                text("Apply sequenced rebase plan to branch history (git rebase -i)").size(11),
+                tooltip::Position::Bottom,
+            ),
         ]
         .padding(Padding::from([6, 12]))
         .align_y(Alignment::Center);
@@ -163,30 +167,38 @@ impl RebaseCrucible {
         .align_y(Alignment::Center);
 
         let order_buttons = row![
-            button(text("▲").size(10).color(MayaColors::STARLIGHT_WHITE))
-                .padding(Padding::from([2, 5]))
-                .style(|_theme, _status| button::Style {
-                    background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
-                    border: Border {
-                        color: MayaColors::OBSIDIAN_BORDER,
-                        width: 1.0,
-                        radius: 2.0.into(),
-                    },
-                    ..Default::default()
-                })
-                .on_press(RebaseMessage::MoveUp(idx).into()),
-            button(text("▼").size(10).color(MayaColors::STARLIGHT_WHITE))
-                .padding(Padding::from([2, 5]))
-                .style(|_theme, _status| button::Style {
-                    background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
-                    border: Border {
-                        color: MayaColors::OBSIDIAN_BORDER,
-                        width: 1.0,
-                        radius: 2.0.into(),
-                    },
-                    ..Default::default()
-                })
-                .on_press(RebaseMessage::MoveDown(idx).into()),
+            tooltip(
+                button(text("▲").size(10).color(MayaColors::STARLIGHT_WHITE))
+                    .padding(Padding::from([2, 5]))
+                    .style(|_theme, _status| button::Style {
+                        background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
+                        border: Border {
+                            color: MayaColors::OBSIDIAN_BORDER,
+                            width: 1.0,
+                            radius: 2.0.into(),
+                        },
+                        ..Default::default()
+                    })
+                    .on_press(RebaseMessage::MoveUp(idx).into()),
+                text("Move commit earlier in rebase order").size(11),
+                tooltip::Position::Top,
+            ),
+            tooltip(
+                button(text("▼").size(10).color(MayaColors::STARLIGHT_WHITE))
+                    .padding(Padding::from([2, 5]))
+                    .style(|_theme, _status| button::Style {
+                        background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
+                        border: Border {
+                            color: MayaColors::OBSIDIAN_BORDER,
+                            width: 1.0,
+                            radius: 2.0.into(),
+                        },
+                        ..Default::default()
+                    })
+                    .on_press(RebaseMessage::MoveDown(idx).into()),
+                text("Move commit later in rebase order").size(11),
+                tooltip::Position::Top,
+            ),
         ]
         .spacing(3)
         .align_y(Alignment::Center);
@@ -250,7 +262,14 @@ impl RebaseCrucible {
             (MayaColors::OBSIDIAN_BASE, MayaColors::GLYPH_DIM, MayaColors::OBSIDIAN_BORDER)
         };
 
-        button(text(label).size(9).color(text_color))
+        let tooltip_desc = match action {
+            RebaseAction::Pick => "Keep this commit in history (pick <sha>)",
+            RebaseAction::Reword => "Keep changes but prompt to edit commit message (reword <sha>)",
+            RebaseAction::Squash => "Meld changes into previous commit (squash <sha>)",
+            RebaseAction::Drop => "Discard this commit from history (drop <sha>)",
+        };
+
+        let btn = button(text(label).size(9).color(text_color))
             .padding(Padding::from([2, 6]))
             .style(move |_theme, _status| button::Style {
                 background: Some(bg.into()),
@@ -261,8 +280,9 @@ impl RebaseCrucible {
                 },
                 ..Default::default()
             })
-            .on_press(RebaseMessage::SetAction(idx, action).into())
-            .into()
+            .on_press(RebaseMessage::SetAction(idx, action).into());
+
+        tooltip(btn, text(tooltip_desc).size(11), tooltip::Position::Top).into()
     }
 
     fn render_conflict_resolver<'a, Message: 'a + From<RebaseMessage> + Clone>(&'a self) -> Element<'a, Message> {
@@ -278,9 +298,13 @@ impl RebaseCrucible {
                 Space::new().height(4),
                 text(&self.conflict_ours).size(11).color(MayaColors::STARLIGHT_WHITE),
                 Space::new().height(6),
-                button(text("Take Ours ✓").size(10).color(MayaColors::JADE_GLOW))
-                    .padding(Padding::from([2, 6]))
-                    .on_press(RebaseMessage::ResolveConflictOurs.into()),
+                tooltip(
+                    button(text("Take Ours ✓").size(10).color(MayaColors::JADE_GLOW))
+                        .padding(Padding::from([2, 6]))
+                        .on_press(RebaseMessage::ResolveConflictOurs.into()),
+                    text("Resolve conflict using local HEAD version (git checkout --ours)").size(11),
+                    tooltip::Position::Top,
+                ),
             ]
             .padding(Padding::from([8, 10]))
         )
@@ -301,9 +325,13 @@ impl RebaseCrucible {
                 Space::new().height(4),
                 text(&self.conflict_theirs).size(11).color(MayaColors::STARLIGHT_WHITE),
                 Space::new().height(6),
-                button(text("Take Theirs ✓").size(10).color(MayaColors::MAYA_BLUE))
-                    .padding(Padding::from([2, 6]))
-                    .on_press(RebaseMessage::ResolveConflictTheirs.into()),
+                tooltip(
+                    button(text("Take Theirs ✓").size(10).color(MayaColors::MAYA_BLUE))
+                        .padding(Padding::from([2, 6]))
+                        .on_press(RebaseMessage::ResolveConflictTheirs.into()),
+                    text("Resolve conflict using incoming rebase version (git checkout --theirs)").size(11),
+                    tooltip::Position::Top,
+                ),
             ]
             .padding(Padding::from([8, 10]))
         )

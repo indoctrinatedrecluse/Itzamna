@@ -1,7 +1,7 @@
 //! The Center Commit Viewport (El Telar de Yaxche)
 //! Integrates GPU DagCanvas, Stone Diff Workbench, Rebase Crucible, and Oracle Radar.
 
-use iced::widget::{button, column, container, row, text, Space};
+use iced::widget::{button, column, container, row, text, tooltip, Space};
 use iced::{Alignment, Border, Color, Element, Length, Padding};
 
 use crate::canvas::{DagCanvas, DagMessage};
@@ -97,45 +97,57 @@ impl CenterLoom {
             Space::new().width(Length::Fill),
             if self.active_tab == CenterTab::YaxcheDag {
                 row![
-                    button(text("−").size(12).color(MayaColors::STARLIGHT_WHITE))
-                        .padding(Padding::from([2, 7]))
-                        .style(|_theme, _status| button::Style {
-                            background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
-                            border: Border {
-                                color: MayaColors::OBSIDIAN_BORDER,
-                                width: 1.0,
-                                radius: 3.0.into(),
-                            },
-                            ..Default::default()
-                        })
-                        .on_press(CenterLoomMessage::ZoomOut.into()),
+                    tooltip(
+                        button(text("−").size(12).color(MayaColors::STARLIGHT_WHITE))
+                            .padding(Padding::from([2, 7]))
+                            .style(|_theme, _status| button::Style {
+                                background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
+                                border: Border {
+                                    color: MayaColors::OBSIDIAN_BORDER,
+                                    width: 1.0,
+                                    radius: 3.0.into(),
+                                },
+                                ..Default::default()
+                            })
+                            .on_press(CenterLoomMessage::ZoomOut.into()),
+                        text("Zoom out commit DAG").size(11),
+                        tooltip::Position::Bottom,
+                    ),
                     container(text(format!("{:.0}%", self.dag.zoom * 100.0)).size(10).color(MayaColors::SOLAR_GOLD))
                         .padding(Padding::from([2, 6])),
-                    button(text("+").size(12).color(MayaColors::STARLIGHT_WHITE))
-                        .padding(Padding::from([2, 7]))
-                        .style(|_theme, _status| button::Style {
-                            background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
-                            border: Border {
-                                color: MayaColors::OBSIDIAN_BORDER,
-                                width: 1.0,
-                                radius: 3.0.into(),
-                            },
-                            ..Default::default()
-                        })
-                        .on_press(CenterLoomMessage::ZoomIn.into()),
+                    tooltip(
+                        button(text("+").size(12).color(MayaColors::STARLIGHT_WHITE))
+                            .padding(Padding::from([2, 7]))
+                            .style(|_theme, _status| button::Style {
+                                background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
+                                border: Border {
+                                    color: MayaColors::OBSIDIAN_BORDER,
+                                    width: 1.0,
+                                    radius: 3.0.into(),
+                                },
+                                ..Default::default()
+                            })
+                            .on_press(CenterLoomMessage::ZoomIn.into()),
+                        text("Zoom in commit DAG").size(11),
+                        tooltip::Position::Bottom,
+                    ),
                     Space::new().width(6),
-                    button(text("☀️ HEAD").size(10).color(MayaColors::SOLAR_AMBER))
-                        .padding(Padding::from([3, 8]))
-                        .style(|_theme, _status| button::Style {
-                            background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
-                            border: Border {
-                                color: MayaColors::SOLAR_AMBER,
-                                width: 1.0,
-                                radius: 3.0.into(),
-                            },
-                            ..Default::default()
-                        })
-                        .on_press(CenterLoomMessage::ResetZoom.into()),
+                    tooltip(
+                        button(text("☀️ HEAD").size(10).color(MayaColors::SOLAR_AMBER))
+                            .padding(Padding::from([3, 8]))
+                            .style(|_theme, _status| button::Style {
+                                background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
+                                border: Border {
+                                    color: MayaColors::SOLAR_AMBER,
+                                    width: 1.0,
+                                    radius: 3.0.into(),
+                                },
+                                ..Default::default()
+                            })
+                            .on_press(CenterLoomMessage::ResetZoom.into()),
+                        text("Reset zoom and focus on active HEAD commit").size(11),
+                        tooltip::Position::Bottom,
+                    ),
                 ]
                 .align_y(Alignment::Center)
             } else {
@@ -224,25 +236,29 @@ impl CenterLoom {
                 };
 
                 let path_clone = f.path.clone();
-                let f_btn = button(
-                    row![
-                        text(f.status).size(9).color(status_color),
-                        Space::new().width(3),
-                        text(&f.path).size(9).color(MayaColors::STARLIGHT_WHITE),
-                    ]
-                    .align_y(Alignment::Center)
-                )
-                .padding(Padding::from([1, 5]))
-                .style(|_theme, _status| button::Style {
-                    background: Some(MayaColors::OBSIDIAN_BASE.into()),
-                    border: Border {
-                        color: MayaColors::OBSIDIAN_BORDER,
-                        width: 1.0,
-                        radius: 2.0.into(),
-                    },
-                    ..Default::default()
-                })
-                .on_press(CenterLoomMessage::OpenFileInDiff(path_clone).into());
+                let f_btn = tooltip(
+                    button(
+                        row![
+                            text(f.status).size(9).color(status_color),
+                            Space::new().width(3),
+                            text(&f.path).size(9).color(MayaColors::STARLIGHT_WHITE),
+                        ]
+                        .align_y(Alignment::Center)
+                    )
+                    .padding(Padding::from([1, 5]))
+                    .style(|_theme, _status| button::Style {
+                        background: Some(MayaColors::OBSIDIAN_BASE.into()),
+                        border: Border {
+                            color: MayaColors::OBSIDIAN_BORDER,
+                            width: 1.0,
+                            radius: 2.0.into(),
+                        },
+                        ..Default::default()
+                    })
+                    .on_press(CenterLoomMessage::OpenFileInDiff(path_clone).into()),
+                    text("Inspect file diff in Etz'nab' Stone Diff (git diff)").size(11),
+                    tooltip::Position::Top,
+                );
 
                 file_buttons = file_buttons.push(f_btn);
             }
@@ -285,7 +301,14 @@ impl CenterLoom {
             MayaColors::PARCHMENT_MUTED
         };
 
-        button(text(label).size(10).color(text_color))
+        let tooltip_desc = match tab {
+            CenterTab::YaxcheDag => "Visual commit DAG graph with branch lanes & merge ribbons (git log --graph --all)",
+            CenterTab::StoneDiff => "Interactive intraline diff viewer with hunk-level staging (git diff)",
+            CenterTab::RebaseCrucible => "Interactive timeline rebase sequencer & 3-way conflict resolver (git rebase -i / git merge)",
+            CenterTab::OracleRadar => "Repository health radar: DORA velocity metrics, lead time, and team analytics",
+        };
+
+        let btn = button(text(label).size(10).color(text_color))
             .padding(Padding::from([3, 8]))
             .style(move |_theme, status| {
                 let border = if is_active {
@@ -315,7 +338,8 @@ impl CenterLoom {
                     ..Default::default()
                 }
             })
-            .on_press(CenterLoomMessage::SelectTab(tab).into())
-            .into()
+            .on_press(CenterLoomMessage::SelectTab(tab).into());
+
+        tooltip(btn, text(tooltip_desc).size(11), tooltip::Position::Bottom).into()
     }
 }

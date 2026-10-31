@@ -2,7 +2,7 @@
 //! Mayan-themed navigation hierarchy framing the application window with
 //! dynamic background mode switcher.
 
-use iced::widget::{button, container, row, text, Space};
+use iced::widget::{button, container, row, text, tooltip, Space};
 use iced::{Alignment, Border, Color, Element, Length, Padding};
 
 use crate::canvas::BackgroundMode;
@@ -77,53 +77,61 @@ impl TopMenuBar {
         };
 
         let quick_actions = row![
-            button(
-                text(self.background_mode.label())
-                    .size(11)
-                    .color(loom_color)
-            )
-            .padding(Padding::from([4, 10]))
-            .style(move |_theme, status| {
-                let border_color = match status {
-                    button::Status::Hovered => loom_color,
-                    _ => MayaColors::OBSIDIAN_BORDER,
-                };
-                button::Style {
-                    background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
-                    text_color: MayaColors::STARLIGHT_WHITE,
-                    border: Border {
-                        color: border_color,
-                        width: 1.0,
-                        radius: 4.0.into(),
-                    },
-                    ..Default::default()
-                }
-            })
-            .on_press(TopMenuMessage::CycleBackgroundMode.into()),
+            tooltip(
+                button(
+                    text(self.background_mode.label())
+                        .size(11)
+                        .color(loom_color)
+                )
+                .padding(Padding::from([4, 10]))
+                .style(move |_theme, status| {
+                    let border_color = match status {
+                        button::Status::Hovered => loom_color,
+                        _ => MayaColors::OBSIDIAN_BORDER,
+                    };
+                    button::Style {
+                        background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
+                        text_color: MayaColors::STARLIGHT_WHITE,
+                        border: Border {
+                            color: border_color,
+                            width: 1.0,
+                            radius: 4.0.into(),
+                        },
+                        ..Default::default()
+                    }
+                })
+                .on_press(TopMenuMessage::CycleBackgroundMode.into()),
+                text("Cycle canvas background (Procedural / Stealth / Static / Video)").size(11),
+                tooltip::Position::Bottom,
+            ),
 
-            button(
-                text("⚡ Fetch Pulse")
-                    .size(11)
-                    .color(MayaColors::SOLAR_AMBER)
-            )
-            .padding(Padding::from([4, 10]))
-            .style(|_theme, status| {
-                let border_color = match status {
-                    button::Status::Hovered => MayaColors::SOLAR_GOLD,
-                    _ => MayaColors::OBSIDIAN_BORDER,
-                };
-                button::Style {
-                    background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
-                    text_color: MayaColors::SOLAR_AMBER,
-                    border: Border {
-                        color: border_color,
-                        width: 1.0,
-                        radius: 4.0.into(),
-                    },
-                    ..Default::default()
-                }
-            })
-            .on_press(TopMenuMessage::FetchPulse.into()),
+            tooltip(
+                button(
+                    text("⚡ Fetch Pulse")
+                        .size(11)
+                        .color(MayaColors::SOLAR_AMBER)
+                )
+                .padding(Padding::from([4, 10]))
+                .style(|_theme, status| {
+                    let border_color = match status {
+                        button::Status::Hovered => MayaColors::SOLAR_GOLD,
+                        _ => MayaColors::OBSIDIAN_BORDER,
+                    };
+                    button::Style {
+                        background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
+                        text_color: MayaColors::SOLAR_AMBER,
+                        border: Border {
+                            color: border_color,
+                            width: 1.0,
+                            radius: 4.0.into(),
+                        },
+                        ..Default::default()
+                    }
+                })
+                .on_press(TopMenuMessage::FetchPulse.into()),
+                text("Fetch remote branches and sync refs (git fetch origin)").size(11),
+                tooltip::Position::Bottom,
+            ),
         ]
         .spacing(8)
         .align_y(Alignment::Center);
@@ -165,7 +173,16 @@ impl TopMenuBar {
             MayaColors::STARLIGHT_WHITE
         };
 
-        button(text(label).size(12).color(txt_color))
+        let tooltip_desc = match category {
+            MenuCategory::PopolVuh => "File Sanctuary: Refresh repository state from disk (git status)",
+            MenuCategory::ChilamBalam => "Diff Chamber: Open granular Stone Diff workbench (git diff)",
+            MenuCategory::CosmicVision => "Commit Loom: Focus central Yaxche commit DAG tree",
+            MenuCategory::Yaxche => "Branch Crucible: Interactive rebase & conflict resolution (git rebase -i)",
+            MenuCategory::SacredAltar => "Sacred Altar: Expand file staging & commit chamber (git add / commit)",
+            MenuCategory::IxchelOracle => "Ixchel Oracle: Engineering telemetry & DORA metric radar",
+        };
+
+        let btn = button(text(label).size(12).color(txt_color))
             .padding(Padding::from([5, 9]))
             .style(move |_theme, status| {
                 let (bg, border) = if is_active {
@@ -197,7 +214,8 @@ impl TopMenuBar {
                     ..Default::default()
                 }
             })
-            .on_press(TopMenuMessage::SelectMenu(category).into())
-            .into()
+            .on_press(TopMenuMessage::SelectMenu(category).into());
+
+        tooltip(btn, text(tooltip_desc).size(11), tooltip::Position::Bottom).into()
     }
 }
