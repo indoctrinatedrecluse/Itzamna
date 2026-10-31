@@ -4,3 +4,7 @@
 .DS_Store
 Thumbs.db
 itzamna-desktop/assets/video_frames/
+.scala-build/
+.bsp/
+/dist/
+

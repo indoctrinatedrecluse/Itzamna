@@ -719,4 +719,32 @@ impl GitSanctuary {
         }
         remotes
     }
+
+    /// 7. Multi-Repo and Genesis Rituals
+    pub fn repo_path(&self) -> String {
+        self.repo
+            .workdir()
+            .or_else(|| self.repo.path().parent())
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|| ".".to_string())
+    }
+
+    pub fn repo_name(&self) -> String {
+        let p = self.repo_path();
+        let path = std::path::Path::new(&p);
+        path.file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "Itzamna Sanctuary".to_string())
+    }
+
+    pub fn clone_repo(url: &str, target_path: &str) -> Result<Self, String> {
+        let repo = Repository::clone(url, target_path).map_err(|e| e.to_string())?;
+        Ok(Self { repo })
+    }
+
+    pub fn init_repo(target_path: &str) -> Result<Self, String> {
+        let repo = Repository::init(target_path).map_err(|e| e.to_string())?;
+        Ok(Self { repo })
+    }
 }

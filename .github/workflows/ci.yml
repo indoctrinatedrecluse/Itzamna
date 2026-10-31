@@ -1,0 +1,46 @@
+name: CI — The Sacred Tests of Itzamna & Ixchel
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  test-desktop:
+    name: Itzamna Desktop (Rust + wgpu)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Cargo Check
+        run: cargo check --bin itzamna-desktop --manifest-path itzamna-desktop/Cargo.toml
+
+      - name: Cargo Test
+        run: cargo test --bin itzamna-desktop --manifest-path itzamna-desktop/Cargo.toml
+
+  test-backend:
+    name: Ixchel Backend (Scala 3 + ZIO 2)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Install Scala CLI
+        run: |
+          curl -fLo scala-cli.deb https://github.com/VirtusLab/scala-cli/releases/latest/download/scala-cli-x86_64-pc-linux.deb
+          sudo dpkg -i scala-cli.deb
+
+      - name: Compile Ixchel
+        run: scala-cli compile --server=false ixchel

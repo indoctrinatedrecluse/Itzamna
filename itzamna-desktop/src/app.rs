@@ -7,13 +7,15 @@ use std::time::Duration;
 use ::image as img_crate;
 
 use crate::canvas::{BackgroundMode, CosmicLoom};
+use crate::config::AppConfig;
 use crate::git::{FileStatus, GitSanctuary};
 use crate::theme::MayaColors;
 use crate::ui::{
-    BlameMessage, BottomProphecy, CenterLoom, CenterLoomMessage, CenterTab, DiffMessage, FileEntry,
-    GlyphRibbon, LeftCodex, LeftCodexMessage, MenuCategory, MergeMessage, OracleMessage,
-    PopolLogMessage, PortalMessage, ProphecyLevel, ProphecyMessage, PurifierMessage, RebaseMessage,
-    ReflogMessage, ResetMode, RightAltar, RightAltarMessage, StatusBar, TopMenuBar, TopMenuMessage,
+    BlameMessage, BottomProphecy, CenterLoom, CenterLoomMessage, CenterTab, CommandPalette,
+    DiffMessage, FileEntry, GlyphRibbon, LeftCodex, LeftCodexMessage, MenuCategory, MergeMessage,
+    OracleMessage, PaletteMessage, PopolLogMessage, PortalMessage, ProphecyLevel, ProphecyMessage,
+    PurifierMessage, RebaseMessage, ReflogMessage, ResetMode, RightAltar, RightAltarMessage,
+    StatusBar, TopMenuBar, TopMenuMessage,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -31,6 +33,8 @@ pub enum Message {
     CenterLoom(CenterLoomMessage),
     RightAltar(RightAltarMessage),
     Prophecy(ProphecyMessage),
+    Palette(PaletteMessage),
+    KeyboardEvent(iced::keyboard::Event),
 }
 
 pub struct ItzamnaApp {
@@ -46,11 +50,13 @@ pub struct ItzamnaApp {
     right_altar: RightAltar,
     bottom_prophecy: BottomProphecy,
     status_bar: StatusBar,
+    palette: CommandPalette,
     background_mode: BackgroundMode,
     static_bg_handle: image::Handle,
     video_frames: Vec<image::Handle>,
     video_frame_index: usize,
     sanctuary: Option<GitSanctuary>,
+    config: AppConfig,
 }
 
 impl Default for ItzamnaApp {
@@ -132,7 +138,19 @@ impl ItzamnaApp {
         let mut center_loom = CenterLoom::new(Vec::new());
         let mut bottom_prophecy = BottomProphecy::new();
 
-        let mut sanctuary = GitSanctuary::open(".").or_else(|_| GitSanctuary::open("..")).ok();
+        let mut config = AppConfig::load();
+        let target_repo = config.active_repo_path.clone().unwrap_or_else(|| ".".to_string());
+        let mut sanctuary = GitSanctuary::open(&target_repo)
+            .or_else(|_| GitSanctuary::open("."))
+            .or_else(|_| GitSanctuary::open(".."))
+            .ok();
+
+        if let Some(ref s) = sanctuary {
+            left_codex.current_repo_name = s.repo_name();
+            left_codex.current_repo_path = s.repo_path();
+            config.add_recent(s.repo_path());
+        }
+        left_codex.recent_repos = config.recent_repos.clone();
 
         if let Some(ref mut s) = sanctuary {
             let (head_branch, head_sha) = s.get_head_info();
@@ -211,11 +229,47 @@ impl ItzamnaApp {
             right_altar,
             bottom_prophecy,
             status_bar,
-            background_mode: BackgroundMode::VideoLoop,
+            palette: CommandPalette::new(),
+            background_mode: match config.background_mode.as_str() {
+                "procedural" => BackgroundMode::ProceduralLoom,
+                "static" => BackgroundMode::StaticArtwork,
+                "stealth" => BackgroundMode::StealthObsidian,
+                _ => BackgroundMode::VideoLoop,
+            },
             static_bg_handle,
             video_frames,
             video_frame_index: 0,
             sanctuary,
+            config,
+        }
+    }
+
+    pub fn open_sanctuary(&mut self, path: &str) {
+        match GitSanctuary::open(path) {
+            Ok(s) => {
+                let name = s.repo_name();
+                let actual_path = s.repo_path();
+                self.left_codex.current_repo_name = name.clone();
+                self.left_codex.current_repo_path = actual_path.clone();
+                self.config.add_recent(actual_path.clone());
+                self.left_codex.recent_repos = self.config.recent_repos.clone();
+                self.sanctuary = Some(s);
+                self.refresh_git_state();
+                self.bottom_prophecy.push(
+                    "23:55:00",
+                    "🏛️",
+                    format!("Transported consciousness to sanctuary: {} ({})", name, actual_path),
+                    ProphecyLevel::Solar,
+                );
+            }
+            Err(e) => {
+                self.bottom_prophecy.push(
+                    "23:55:00",
+                    "🌑",
+                    format!("Sanctuary door sealed at {}: {}", path, e),
+                    ProphecyLevel::Xibalba,
+                );
+            }
         }
     }
 
@@ -271,22 +325,25 @@ impl ItzamnaApp {
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
-        if self.stage == AppStage::Splash {
-            return iced::time::every(Duration::from_millis(16)).map(|_| Message::Tick);
-        }
+        let timer_sub = if self.stage == AppStage::Splash {
+            iced::time::every(Duration::from_millis(16)).map(|_| Message::Tick)
+        } else {
+            match self.background_mode {
+                BackgroundMode::ProceduralLoom => {
+                    iced::time::every(Duration::from_millis(16)).map(|_| Message::Tick)
+                }
+                BackgroundMode::VideoLoop => {
+                    iced::time::every(Duration::from_millis(41)).map(|_| Message::Tick)
+                }
+                BackgroundMode::StaticArtwork | BackgroundMode::StealthObsidian => {
+                    iced::time::every(Duration::from_millis(32)).map(|_| Message::Tick)
+                }
+            }
+        };
 
-        match self.background_mode {
-            BackgroundMode::ProceduralLoom => {
-                iced::time::every(Duration::from_millis(16)).map(|_| Message::Tick)
-            }
-            BackgroundMode::VideoLoop => {
-                // Smooth 24 FPS video cycle
-                iced::time::every(Duration::from_millis(41)).map(|_| Message::Tick)
-            }
-            BackgroundMode::StaticArtwork | BackgroundMode::StealthObsidian => {
-                iced::time::every(Duration::from_millis(32)).map(|_| Message::Tick)
-            }
-        }
+        let keyboard_sub = iced::keyboard::listen().map(Message::KeyboardEvent);
+
+        Subscription::batch(vec![timer_sub, keyboard_sub])
     }
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
@@ -396,6 +453,16 @@ impl ItzamnaApp {
                     self.bottom_prophecy.push("23:55:00", "⚡", "Sent Solar Pulse to Remote Horizon (git fetch origin)".into(), ProphecyLevel::Solar);
                     Task::none()
                 }
+                TopMenuMessage::OpenCommandPalette => {
+                    self.palette.is_open = true;
+                    self.palette.search_query.clear();
+                    self.palette.selected_index = 0;
+                    Task::none()
+                }
+                TopMenuMessage::ToggleKeybindings => {
+                    self.palette.is_help_open = !self.palette.is_help_open;
+                    Task::none()
+                }
             },
             Message::LeftCodex(codex_msg) => match codex_msg {
                 LeftCodexMessage::ToggleCollapse => {
@@ -489,6 +556,97 @@ impl ItzamnaApp {
                         }
                     }
                     self.refresh_git_state();
+                    Task::none()
+                }
+                LeftCodexMessage::ToggleRepoDropdown => {
+                    self.left_codex.is_repo_dropdown_open = !self.left_codex.is_repo_dropdown_open;
+                    Task::none()
+                }
+                LeftCodexMessage::SelectRepo(path) => {
+                    self.left_codex.is_repo_dropdown_open = false;
+                    self.open_sanctuary(&path);
+                    Task::none()
+                }
+                LeftCodexMessage::OpenCloneModal => {
+                    self.left_codex.is_clone_modal_open = true;
+                    self.left_codex.is_repo_dropdown_open = false;
+                    Task::none()
+                }
+                LeftCodexMessage::CloseCloneModal => {
+                    self.left_codex.is_clone_modal_open = false;
+                    Task::none()
+                }
+                LeftCodexMessage::CloneUrlChanged(url) => {
+                    self.left_codex.clone_url_input = url;
+                    Task::none()
+                }
+                LeftCodexMessage::CloneDirChanged(dir) => {
+                    self.left_codex.clone_dir_input = dir;
+                    Task::none()
+                }
+                LeftCodexMessage::ConfirmClone => {
+                    let url = self.left_codex.clone_url_input.trim().to_string();
+                    let dir = self.left_codex.clone_dir_input.trim().to_string();
+                    if url.is_empty() || dir.is_empty() {
+                        self.bottom_prophecy.push("23:55:00", "⚠️", "Clone ritual requires both valid Remote URL and Target Directory".to_string(), ProphecyLevel::Xibalba);
+                    } else {
+                        match GitSanctuary::clone_repo(&url, &dir) {
+                            Ok(s) => {
+                                self.left_codex.is_clone_modal_open = false;
+                                self.left_codex.clone_url_input.clear();
+                                self.left_codex.clone_dir_input.clear();
+                                let actual_path = s.repo_path();
+                                self.sanctuary = Some(s);
+                                self.left_codex.current_repo_name = std::path::Path::new(&dir).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| dir.clone());
+                                self.left_codex.current_repo_path = actual_path.clone();
+                                self.config.add_recent(actual_path);
+                                self.left_codex.recent_repos = self.config.recent_repos.clone();
+                                self.refresh_git_state();
+                                self.bottom_prophecy.push("23:55:00", "🌐", format!("Transmuted and summoned external sanctuary from {}", url), ProphecyLevel::Jade);
+                            }
+                            Err(e) => {
+                                self.bottom_prophecy.push("23:55:00", "🌑", format!("Clone ritual thwarted: {}", e), ProphecyLevel::Xibalba);
+                            }
+                        }
+                    }
+                    Task::none()
+                }
+                LeftCodexMessage::OpenInitModal => {
+                    self.left_codex.is_init_modal_open = true;
+                    self.left_codex.is_repo_dropdown_open = false;
+                    Task::none()
+                }
+                LeftCodexMessage::CloseInitModal => {
+                    self.left_codex.is_init_modal_open = false;
+                    Task::none()
+                }
+                LeftCodexMessage::InitDirChanged(dir) => {
+                    self.left_codex.init_dir_input = dir;
+                    Task::none()
+                }
+                LeftCodexMessage::ConfirmInit => {
+                    let dir = self.left_codex.init_dir_input.trim().to_string();
+                    if dir.is_empty() {
+                        self.bottom_prophecy.push("23:55:00", "⚠️", "Genesis ritual requires a valid target directory path".to_string(), ProphecyLevel::Xibalba);
+                    } else {
+                        match GitSanctuary::init_repo(&dir) {
+                            Ok(s) => {
+                                self.left_codex.is_init_modal_open = false;
+                                self.left_codex.init_dir_input.clear();
+                                let actual_path = s.repo_path();
+                                self.sanctuary = Some(s);
+                                self.left_codex.current_repo_name = std::path::Path::new(&dir).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| dir.clone());
+                                self.left_codex.current_repo_path = actual_path.clone();
+                                self.config.add_recent(actual_path);
+                                self.left_codex.recent_repos = self.config.recent_repos.clone();
+                                self.refresh_git_state();
+                                self.bottom_prophecy.push("23:55:00", "✨", format!("Consecrated pristine Git sanctuary at {}", dir), ProphecyLevel::Solar);
+                            }
+                            Err(e) => {
+                                self.bottom_prophecy.push("23:55:00", "🌑", format!("Genesis ritual thwarted: {}", e), ProphecyLevel::Xibalba);
+                            }
+                        }
+                    }
                     Task::none()
                 }
             },
@@ -793,17 +951,74 @@ impl ItzamnaApp {
                 },
                 CenterLoomMessage::Oracle(o_msg) => match o_msg {
                     OracleMessage::RefreshTelemetry => {
-                        self.bottom_prophecy.push("23:55:00", "🌙", "Polled Ixchel Oracle heartbeat: 200 OK".into(), ProphecyLevel::Maya);
-                        Task::none()
+                        self.bottom_prophecy.push("23:55:00", "🌙", "Interrogating Ixchel Oracle Conduit (http://127.0.0.1:9090)...".into(), ProphecyLevel::Maya);
+                        Task::perform(
+                            async {
+                                let client = reqwest::Client::builder()
+                                    .timeout(std::time::Duration::from_secs(3))
+                                    .build()
+                                    .map_err(|e| e.to_string())?;
+                                let res = client
+                                    .get("http://127.0.0.1:9090/api/v1/analytics/overview")
+                                    .send()
+                                    .await
+                                    .map_err(|e| e.to_string())?;
+                                let data = res.json::<crate::ui::RepoHealthOverviewJson>().await.map_err(|e| e.to_string())?;
+                                Ok(data)
+                            },
+                            |res| Message::CenterLoom(CenterLoomMessage::Oracle(OracleMessage::TelemetryReceived(res))),
+                        )
                     }
                     OracleMessage::TriggerDeepSync => {
-                        self.bottom_prophecy.push("23:55:00", "🔮", "Triggered deep DORA and churn calculation cycle".into(), ProphecyLevel::Solar);
+                        self.bottom_prophecy.push("23:55:00", "🔮", "Triggered deep DORA & velocity mining across provider threads...".into(), ProphecyLevel::Solar);
+                        Task::perform(
+                            async {
+                                let client = reqwest::Client::builder()
+                                    .timeout(std::time::Duration::from_secs(4))
+                                    .build()
+                                    .map_err(|e| e.to_string())?;
+                                let res = client
+                                    .post("http://127.0.0.1:9090/api/v1/sync")
+                                    .send()
+                                    .await
+                                    .map_err(|e| e.to_string())?;
+                                let data = res.json::<crate::ui::RepoHealthOverviewJson>().await.map_err(|e| e.to_string())?;
+                                Ok(data)
+                            },
+                            |res| Message::CenterLoom(CenterLoomMessage::Oracle(OracleMessage::TelemetryReceived(res))),
+                        )
+                    }
+                    OracleMessage::TelemetryReceived(res) => {
+                        match res {
+                            Ok(data) => {
+                                self.center_loom.oracle_radar.apply_telemetry(data);
+                                self.bottom_prophecy.push(
+                                    "23:55:00",
+                                    "🌕",
+                                    "Ixchel Conduit Online: Telemetry synced (DORA: Elite, Health: 90+)".to_string(),
+                                    ProphecyLevel::Jade,
+                                );
+                            }
+                            Err(e) => {
+                                self.center_loom.oracle_radar.mark_offline(&e);
+                                self.bottom_prophecy.push(
+                                    "23:55:00",
+                                    "🌑",
+                                    format!("Ixchel Conduit Dormant: {}. (Run 'java -jar ixchel.jar' to connect)", e),
+                                    ProphecyLevel::Xibalba,
+                                );
+                            }
+                        }
                         Task::none()
                     }
                 },
                 CenterLoomMessage::SelectTab(tab) => {
                     self.center_loom.active_tab = tab;
-                    Task::none()
+                    if tab == CenterTab::OracleRadar {
+                        Task::done(Message::CenterLoom(CenterLoomMessage::Oracle(OracleMessage::RefreshTelemetry)))
+                    } else {
+                        Task::none()
+                    }
                 }
                 CenterLoomMessage::ZoomIn => {
                     self.center_loom.dag.zoom_in();
@@ -929,6 +1144,217 @@ impl ItzamnaApp {
                     Task::none()
                 }
             },
+            Message::Palette(pal_msg) => match pal_msg {
+                PaletteMessage::Open => {
+                    self.palette.is_open = true;
+                    self.palette.search_query.clear();
+                    self.palette.selected_index = 0;
+                    Task::none()
+                }
+                PaletteMessage::Close => {
+                    self.palette.is_open = false;
+                    Task::none()
+                }
+                PaletteMessage::QueryChanged(q) => {
+                    self.palette.search_query = q;
+                    self.palette.selected_index = 0;
+                    Task::none()
+                }
+                PaletteMessage::SelectPrevious => {
+                    if self.palette.selected_index > 0 {
+                        self.palette.selected_index -= 1;
+                    }
+                    Task::none()
+                }
+                PaletteMessage::SelectNext => {
+                    let total = self.palette.filtered_commands().len();
+                    if total > 0 && self.palette.selected_index + 1 < total {
+                        self.palette.selected_index += 1;
+                    }
+                    Task::none()
+                }
+                PaletteMessage::ExecuteSelected => {
+                    let filtered = self.palette.filtered_commands();
+                    if let Some(cmd) = filtered.get(self.palette.selected_index) {
+                        let id = cmd.id;
+                        return Task::done(Message::Palette(PaletteMessage::ExecuteCommand(id)));
+                    }
+                    Task::none()
+                }
+                PaletteMessage::ExecuteCommand(id) => {
+                    self.palette.is_open = false;
+                    match id {
+                        "tab_dag" => {
+                            self.center_loom.active_tab = CenterTab::YaxcheDag;
+                            self.bottom_prophecy.push("23:55:00", "🌳", "Transported to Yaxché Commit DAG".to_string(), ProphecyLevel::Solar);
+                        }
+                        "tab_diff" => {
+                            self.center_loom.active_tab = CenterTab::StoneDiff;
+                            self.bottom_prophecy.push("23:55:00", "🔪", "Transported to Altar of Creation (Diff)".to_string(), ProphecyLevel::Jade);
+                        }
+                        "tab_rebase" => {
+                            self.center_loom.active_tab = CenterTab::RebaseCrucible;
+                            self.bottom_prophecy.push("23:55:00", "🔄", "Transported to K'uk'ulkan Rebase Crucible".to_string(), ProphecyLevel::Solar);
+                        }
+                        "tab_conflict" => {
+                            self.center_loom.active_tab = CenterTab::RebaseCrucible;
+                            self.bottom_prophecy.push("23:55:00", "⚖️", "Transported to Three-Way Conflict Altar".to_string(), ProphecyLevel::Maya);
+                        }
+                        "tab_blame" => {
+                            self.center_loom.active_tab = CenterTab::AhauBlame;
+                            self.bottom_prophecy.push("23:55:00", "👑", "Transported to The Ahau Lineage (Blame)".to_string(), ProphecyLevel::Solar);
+                        }
+                        "tab_log" => {
+                            self.center_loom.active_tab = CenterTab::PopolVuhLog;
+                            self.bottom_prophecy.push("23:55:00", "📜", "Transported to The Popol Vuh Chronicle (Log)".to_string(), ProphecyLevel::Solar);
+                        }
+                        "tab_reflog" => {
+                            self.center_loom.active_tab = CenterTab::XibalbaReflog;
+                            self.bottom_prophecy.push("23:55:00", "🪞", "Transported to The Xibalba Mirror (Reflog)".to_string(), ProphecyLevel::Xibalba);
+                        }
+                        "tab_merge" => {
+                            self.center_loom.active_tab = CenterTab::KukulcanMerge;
+                            self.bottom_prophecy.push("23:55:00", "🌿", "Transported to K'uk'ulkan Confluence (Merge)".to_string(), ProphecyLevel::Jade);
+                        }
+                        "tab_clean" => {
+                            self.center_loom.active_tab = CenterTab::ChacPurifier;
+                            self.bottom_prophecy.push("23:55:00", "🌧️", "Transported to The Chac Purifier (Clean)".to_string(), ProphecyLevel::Maya);
+                        }
+                        "tab_remote" => {
+                            self.center_loom.active_tab = CenterTab::OverseerPortals;
+                            self.bottom_prophecy.push("23:55:00", "🌐", "Transported to The Overseer Portals (Remotes)".to_string(), ProphecyLevel::Maya);
+                        }
+                        "tab_oracle" => {
+                            self.center_loom.active_tab = CenterTab::OracleRadar;
+                            self.bottom_prophecy.push("23:55:00", "🔮", "Transported to Ixchel Oracle Radar".to_string(), ProphecyLevel::Jade);
+                            return Task::done(Message::CenterLoom(CenterLoomMessage::Oracle(OracleMessage::RefreshTelemetry)));
+                        }
+                        "action_sync" => {
+                            return Task::done(Message::CenterLoom(CenterLoomMessage::Oracle(OracleMessage::TriggerDeepSync)));
+                        }
+                        "action_branch" => {
+                            self.left_codex.is_sprouting_branch = true;
+                            self.left_codex.is_collapsed = false;
+                        }
+                        "action_tag" => {
+                            self.left_codex.is_inscribing_tag = true;
+                            self.left_codex.is_collapsed = false;
+                        }
+                        "action_stash" => {
+                            return Task::done(Message::LeftCodex(LeftCodexMessage::CreateStash));
+                        }
+                        "action_cycle_bg" => {
+                            self.background_mode = self.background_mode.next();
+                            self.top_menu.background_mode = self.background_mode;
+                            self.config.background_mode = match self.background_mode {
+                                BackgroundMode::ProceduralLoom => "procedural".to_string(),
+                                BackgroundMode::StaticArtwork => "static".to_string(),
+                                BackgroundMode::StealthObsidian => "stealth".to_string(),
+                                BackgroundMode::VideoLoop => "video".to_string(),
+                            };
+                            let _ = self.config.save();
+                        }
+                        "action_toggle_codex" => {
+                            self.left_codex.is_collapsed = !self.left_codex.is_collapsed;
+                        }
+                        "action_shortcuts" => {
+                            self.palette.is_help_open = true;
+                        }
+                        _ => {}
+                    }
+                    Task::none()
+                }
+                PaletteMessage::ToggleHelp => {
+                    self.palette.is_help_open = !self.palette.is_help_open;
+                    Task::none()
+                }
+                PaletteMessage::CloseHelp => {
+                    self.palette.is_help_open = false;
+                    Task::none()
+                }
+            },
+            Message::KeyboardEvent(iced::keyboard::Event::KeyPressed { key, modifiers, .. }) => {
+                use iced::keyboard::key::Named;
+                use iced::keyboard::Key;
+
+                // 1. Escape: Close palette or help
+                if matches!(key, Key::Named(Named::Escape)) {
+                    if self.palette.is_open || self.palette.is_help_open {
+                        self.palette.is_open = false;
+                        self.palette.is_help_open = false;
+                        return Task::none();
+                    }
+                }
+
+                // 2. F1 or '?': Toggle help modal
+                if matches!(key, Key::Named(Named::F1)) || (matches!(&key, Key::Character(c) if c == "?") && !self.palette.is_open) {
+                    self.palette.is_help_open = !self.palette.is_help_open;
+                    return Task::none();
+                }
+
+                // 3. Ctrl + P or Ctrl + K: Toggle Command Palette
+                if modifiers.control() {
+                    if let Key::Character(c) = &key {
+                        let lower = c.to_lowercase();
+                        if lower == "p" || lower == "k" {
+                            self.palette.is_open = !self.palette.is_open;
+                            self.palette.search_query.clear();
+                            self.palette.selected_index = 0;
+                            return Task::none();
+                        } else if lower == "b" {
+                            self.left_codex.is_collapsed = !self.left_codex.is_collapsed;
+                            return Task::none();
+                        } else if lower == "l" {
+                            self.background_mode = self.background_mode.next();
+                            self.top_menu.background_mode = self.background_mode;
+                            self.config.background_mode = match self.background_mode {
+                                BackgroundMode::ProceduralLoom => "procedural".to_string(),
+                                BackgroundMode::StaticArtwork => "static".to_string(),
+                                BackgroundMode::StealthObsidian => "stealth".to_string(),
+                                BackgroundMode::VideoLoop => "video".to_string(),
+                            };
+                            let _ = self.config.save();
+                            return Task::none();
+                        } else if lower == "1" {
+                            self.center_loom.active_tab = CenterTab::YaxcheDag;
+                            return Task::none();
+                        } else if lower == "2" {
+                            self.center_loom.active_tab = CenterTab::StoneDiff;
+                            return Task::none();
+                        } else if lower == "3" {
+                            self.center_loom.active_tab = CenterTab::RebaseCrucible;
+                            return Task::none();
+                        } else if lower == "4" {
+                            self.center_loom.active_tab = CenterTab::KukulcanMerge;
+                            return Task::none();
+                        } else if lower == "5" {
+                            self.center_loom.active_tab = CenterTab::AhauBlame;
+                            return Task::none();
+                        } else if lower == "6" {
+                            self.center_loom.active_tab = CenterTab::PopolVuhLog;
+                            return Task::none();
+                        } else if lower == "7" {
+                            self.center_loom.active_tab = CenterTab::XibalbaReflog;
+                            return Task::none();
+                        } else if lower == "8" {
+                            self.center_loom.active_tab = CenterTab::KukulcanMerge;
+                            return Task::none();
+                        } else if lower == "9" {
+                            self.center_loom.active_tab = CenterTab::ChacPurifier;
+                            return Task::none();
+                        } else if lower == "0" {
+                            self.center_loom.active_tab = CenterTab::OverseerPortals;
+                            return Task::none();
+                        } else if lower == "i" {
+                            self.center_loom.active_tab = CenterTab::OracleRadar;
+                            return Task::done(Message::CenterLoom(CenterLoomMessage::Oracle(OracleMessage::RefreshTelemetry)));
+                        }
+                    }
+                }
+
+                Task::none()
+            }
+            Message::KeyboardEvent(_) => Task::none(),
         }
     }
 
@@ -997,13 +1423,16 @@ impl ItzamnaApp {
         .width(Length::Fill)
         .height(Length::Fill);
 
-        stack![
-            background_layer,
-            foreground,
-        ]
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .into()
+        let mut layers = vec![background_layer, foreground.into()];
+
+        if let Some(pal_view) = self.palette.view() {
+            layers.push(pal_view.map(Message::Palette));
+        }
+
+        iced::widget::Stack::with_children(layers)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into()
     }
 
     fn view_splash(&self) -> Element<'_, Message> {

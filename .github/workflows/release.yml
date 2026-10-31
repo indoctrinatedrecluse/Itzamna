@@ -1,0 +1,116 @@
+name: Release — Consecrate Binary Artifacts
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Build Windows Executable & Installer
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build Release Binary
+        run: cargo build --release --bin itzamna-desktop --manifest-path itzamna-desktop/Cargo.toml
+
+      - name: Prepare Windows Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "dist/windows" | Out-Null
+          Copy-Item "target/release/itzamna-desktop.exe" "dist/windows/"
+          Copy-Item "itzamna-desktop/assets" "dist/windows/assets" -Recurse
+          if (Test-Path "ixchel.jar") { Copy-Item "ixchel.jar" "dist/windows/" }
+          Compress-Archive -Path "dist/windows/*" -DestinationPath "dist/itzamna-windows-x86_64.zip"
+
+      - name: Upload Windows Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: itzamna-windows-x86_64
+          path: dist/itzamna-windows-x86_64.zip
+
+  build-linux:
+    name: Build Linux Binary
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev libasound2-dev libudev-dev libfontconfig1-dev
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build Release Binary
+        run: cargo build --release --bin itzamna-desktop --manifest-path itzamna-desktop/Cargo.toml
+
+      - name: Package Linux Tarball
+        run: |
+          mkdir -p dist/linux
+          cp target/release/itzamna-desktop dist/linux/
+          cp -r itzamna-desktop/assets dist/linux/
+          tar -czvf dist/itzamna-linux-x86_64.tar.gz -C dist/linux .
+
+      - name: Upload Linux Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: itzamna-linux-x86_64
+          path: dist/itzamna-linux-x86_64.tar.gz
+
+  build-macos:
+    name: Build macOS Binary
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build Release Binary
+        run: cargo build --release --bin itzamna-desktop --manifest-path itzamna-desktop/Cargo.toml
+
+      - name: Package macOS Tarball
+        run: |
+          mkdir -p dist/macos
+          cp target/release/itzamna-desktop dist/macos/
+          cp -r itzamna-desktop/assets dist/macos/
+          tar -czvf dist/itzamna-macos-universal.tar.gz -C dist/macos .
+
+      - name: Upload macOS Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: itzamna-macos-universal
+          path: dist/itzamna-macos-universal.tar.gz
+
+  publish-release:
+    name: Publish GitHub Release
+    needs: [build-windows, build-linux, build-macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/itzamna-windows-x86_64/itzamna-windows-x86_64.zip
+            artifacts/itzamna-linux-x86_64/itzamna-linux-x86_64.tar.gz
+            artifacts/itzamna-macos-universal/itzamna-macos-universal.tar.gz
+          name: Itzamna ${{ github.ref_name }} — Consecrated Release
+          draft: false
+          prerelease: false
+          generate_release_notes: true

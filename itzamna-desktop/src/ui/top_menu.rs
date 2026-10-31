@@ -26,6 +26,8 @@ pub enum TopMenuMessage {
     OpenCodex,
     NewInscription,
     FetchPulse,
+    OpenCommandPalette,
+    ToggleKeybindings,
 }
 
 pub struct TopMenuBar {
@@ -77,6 +79,70 @@ impl TopMenuBar {
         };
 
         let quick_actions = row![
+            tooltip(
+                button(
+                    row![
+                        text("🔍").size(10),
+                        Space::new().width(4),
+                        text("Rituals").size(11).color(MayaColors::MAYA_BLUE),
+                        Space::new().width(4),
+                        text("Ctrl+P").size(9).color(MayaColors::GLYPH_DIM),
+                    ]
+                    .align_y(Alignment::Center)
+                )
+                .padding(Padding::from([4, 8]))
+                .style(|_theme, status| {
+                    let border_color = match status {
+                        button::Status::Hovered => MayaColors::MAYA_BLUE,
+                        _ => MayaColors::OBSIDIAN_BORDER,
+                    };
+                    button::Style {
+                        background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
+                        border: Border {
+                            color: border_color,
+                            width: 1.0,
+                            radius: 4.0.into(),
+                        },
+                        ..Default::default()
+                    }
+                })
+                .on_press(TopMenuMessage::OpenCommandPalette.into()),
+                text("Open Command Palette to search and execute all sacred rituals (Ctrl+P)").size(11),
+                tooltip::Position::Bottom,
+            ),
+
+            tooltip(
+                button(
+                    row![
+                        text("⌨️").size(10),
+                        Space::new().width(4),
+                        text("Map").size(11).color(MayaColors::SOLAR_GOLD),
+                        Space::new().width(4),
+                        text("F1").size(9).color(MayaColors::GLYPH_DIM),
+                    ]
+                    .align_y(Alignment::Center)
+                )
+                .padding(Padding::from([4, 8]))
+                .style(|_theme, status| {
+                    let border_color = match status {
+                        button::Status::Hovered => MayaColors::SOLAR_GOLD,
+                        _ => MayaColors::OBSIDIAN_BORDER,
+                    };
+                    button::Style {
+                        background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
+                        border: Border {
+                            color: border_color,
+                            width: 1.0,
+                            radius: 4.0.into(),
+                        },
+                        ..Default::default()
+                    }
+                })
+                .on_press(TopMenuMessage::ToggleKeybindings.into()),
+                text("Reveal the complete Sacred Glyph Keyboard Map (F1 or ?)").size(11),
+                tooltip::Position::Bottom,
+            ),
+
             tooltip(
                 button(
                     text(self.background_mode.label())
@@ -133,7 +199,7 @@ impl TopMenuBar {
                 tooltip::Position::Bottom,
             ),
         ]
-        .spacing(8)
+        .spacing(6)
         .align_y(Alignment::Center);
 
         let content = row![

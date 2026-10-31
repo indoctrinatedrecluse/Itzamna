@@ -1,5 +1,6 @@
 pub mod app;
 pub mod canvas;
+pub mod config;
 pub mod git;
 pub mod theme;
 pub mod ui;
