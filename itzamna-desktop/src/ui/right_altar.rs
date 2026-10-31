@@ -9,12 +9,14 @@ use crate::theme::MayaColors;
 #[derive(Debug, Clone)]
 pub enum RightAltarMessage {
     ToggleCollapse,
+    OpenFileDiff(String),
     StageFile(String),
     UnstageFile(String),
     StageAll,
     UnstageAll,
     DiscardAll,
     CommitSummaryChanged(String),
+    CommitDescriptionChanged(String),
     InscribeCommit,
 }
 
@@ -29,6 +31,7 @@ pub struct RightAltar {
     pub unstaged_files: Vec<FileEntry>,
     pub staged_files: Vec<FileEntry>,
     pub commit_summary: String,
+    pub commit_description: String,
 }
 
 impl Default for RightAltar {
@@ -41,17 +44,10 @@ impl RightAltar {
     pub fn new() -> Self {
         Self {
             is_collapsed: false,
-            unstaged_files: vec![
-                FileEntry { path: "src/canvas/background_mode.rs".into(), status: "M" },
-                FileEntry { path: "src/ui/left_codex.rs".into(), status: "A" },
-                FileEntry { path: "src/ui/right_altar.rs".into(), status: "A" },
-                FileEntry { path: "assets/background.png".into(), status: "?" },
-            ],
-            staged_files: vec![
-                FileEntry { path: "Cargo.toml".into(), status: "M" },
-                FileEntry { path: "README.md".into(), status: "M" },
-            ],
-            commit_summary: "feat(stelae): awaken four sacred quadrant panels".to_string(),
+            unstaged_files: Vec::new(),
+            staged_files: Vec::new(),
+            commit_summary: "".to_string(),
+            commit_description: "".to_string(),
         }
     }
 
@@ -75,7 +71,6 @@ impl RightAltar {
             .into();
         }
 
-        // Stele Header
         let header = row![
             button(text("▶").size(11).color(MayaColors::GLYPH_DIM))
                 .padding(Padding::from([2, 6]))
@@ -99,13 +94,8 @@ impl RightAltar {
         .padding(Padding::from([8, 12]))
         .align_y(Alignment::Center);
 
-        // 1. Unstaged Offerings Section
         let unstaged_section = self.render_unstaged_section();
-
-        // 2. Staged Sacrifices Section
         let staged_section = self.render_staged_section();
-
-        // 3. Inscription Chamber (Commit)
         let commit_chamber = self.render_commit_chamber();
 
         let files_scroll = scrollable(
@@ -163,6 +153,10 @@ impl RightAltar {
 
         let mut list = column![header].spacing(3);
 
+        if self.unstaged_files.is_empty() {
+            list = list.push(text("No unstaged modifications.").size(10).color(MayaColors::GLYPH_DIM));
+        }
+
         for file in &self.unstaged_files {
             let status_color = match file.status {
                 "M" => MayaColors::SOLAR_AMBER,
@@ -170,12 +164,26 @@ impl RightAltar {
                 _ => MayaColors::CINNABAR_BRIGHT,
             };
 
+            let path_for_diff = file.path.clone();
+            let file_link = button(
+                row![
+                    text(file.status).size(10).color(status_color),
+                    Space::new().width(6),
+                    text(&file.path)
+                        .size(11)
+                        .color(MayaColors::STARLIGHT_WHITE),
+                ]
+                .align_y(Alignment::Center)
+            )
+            .padding(Padding::from([1, 4]))
+            .style(|_theme, _status| button::Style {
+                background: Some(Color::TRANSPARENT.into()),
+                ..Default::default()
+            })
+            .on_press(RightAltarMessage::OpenFileDiff(path_for_diff).into());
+
             let row_item = row![
-                text(file.status).size(10).color(status_color),
-                Space::new().width(6),
-                text(&file.path)
-                    .size(11)
-                    .color(MayaColors::STARLIGHT_WHITE),
+                file_link,
                 Space::new().width(Length::Fill),
                 button(text("+").size(11).color(MayaColors::JADE_GLOW))
                     .padding(Padding::from([0, 5]))
@@ -185,7 +193,7 @@ impl RightAltar {
                     })
                     .on_press(RightAltarMessage::StageFile(file.path.clone()).into()),
             ]
-            .padding(Padding::from([2, 6]))
+            .padding(Padding::from([2, 4]))
             .align_y(Alignment::Center);
 
             list = list.push(row_item);
@@ -223,13 +231,31 @@ impl RightAltar {
 
         let mut list = column![header].spacing(3);
 
+        if self.staged_files.is_empty() {
+            list = list.push(text("No files staged for inscription.").size(10).color(MayaColors::GLYPH_DIM));
+        }
+
         for file in &self.staged_files {
+            let path_for_diff = file.path.clone();
+            let file_link = button(
+                row![
+                    text(file.status).size(10).color(MayaColors::JADE_GLOW),
+                    Space::new().width(6),
+                    text(&file.path)
+                        .size(11)
+                        .color(MayaColors::STARLIGHT_WHITE),
+                ]
+                .align_y(Alignment::Center)
+            )
+            .padding(Padding::from([1, 4]))
+            .style(|_theme, _status| button::Style {
+                background: Some(Color::TRANSPARENT.into()),
+                ..Default::default()
+            })
+            .on_press(RightAltarMessage::OpenFileDiff(path_for_diff).into());
+
             let row_item = row![
-                text(file.status).size(10).color(MayaColors::JADE_GLOW),
-                Space::new().width(6),
-                text(&file.path)
-                    .size(11)
-                    .color(MayaColors::STARLIGHT_WHITE),
+                file_link,
                 Space::new().width(Length::Fill),
                 button(text("-").size(11).color(MayaColors::CINNABAR_BRIGHT))
                     .padding(Padding::from([0, 5]))
@@ -239,7 +265,7 @@ impl RightAltar {
                     })
                     .on_press(RightAltarMessage::UnstageFile(file.path.clone()).into()),
             ]
-            .padding(Padding::from([2, 6]))
+            .padding(Padding::from([2, 4]))
             .align_y(Alignment::Center);
 
             list = list.push(row_item);
@@ -262,15 +288,15 @@ impl RightAltar {
         ]
         .align_y(Alignment::Center);
 
-        let input_field = text_input("Describe the sacred deed in stone...", &self.commit_summary)
+        let summary_input = text_input("Commit title (e.g. feat: awaken new ritual)...", &self.commit_summary)
             .size(11)
-            .padding(Padding::from([8, 10]))
+            .padding(Padding::from([7, 9]))
             .style(|_theme, _status| text_input::Style {
                 background: MayaColors::OBSIDIAN_SURFACE.into(),
                 border: Border {
                     color: MayaColors::OBSIDIAN_BORDER,
                     width: 1.0,
-                    radius: 4.0.into(),
+                    radius: 3.0.into(),
                 },
                 icon: MayaColors::PARCHMENT_MUTED,
                 placeholder: MayaColors::GLYPH_DIM,
@@ -278,6 +304,23 @@ impl RightAltar {
                 selection: MayaColors::JADE_SHADOW,
             })
             .on_input(|val| RightAltarMessage::CommitSummaryChanged(val).into());
+
+        let desc_input = text_input("Optional description / glyph notes...", &self.commit_description)
+            .size(10)
+            .padding(Padding::from([6, 9]))
+            .style(|_theme, _status| text_input::Style {
+                background: MayaColors::OBSIDIAN_SURFACE.into(),
+                border: Border {
+                    color: MayaColors::OBSIDIAN_BORDER,
+                    width: 1.0,
+                    radius: 3.0.into(),
+                },
+                icon: MayaColors::PARCHMENT_MUTED,
+                placeholder: MayaColors::GLYPH_DIM,
+                value: MayaColors::STARLIGHT_WHITE,
+                selection: MayaColors::JADE_SHADOW,
+            })
+            .on_input(|val| RightAltarMessage::CommitDescriptionChanged(val).into());
 
         let commit_button = button(
             row![
@@ -308,8 +351,10 @@ impl RightAltar {
         container(
             column![
                 chamber_title,
-                Space::new().height(6),
-                input_field,
+                Space::new().height(5),
+                summary_input,
+                Space::new().height(4),
+                desc_input,
                 Space::new().height(8),
                 commit_button,
             ]

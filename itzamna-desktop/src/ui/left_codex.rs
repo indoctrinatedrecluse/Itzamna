@@ -1,7 +1,7 @@
 //! The Left Codex (El Códice)
-//! Hierarchical sidebar managing branches (Yaxche), tags (Lamat), stashes (Ak'bal), and remotes.
+//! Hierarchical sidebar managing real branches (Yaxche), tags (Lamat), stashes (Ak'bal), and remotes.
 
-use iced::widget::{button, column, container, row, scrollable, text, Space};
+use iced::widget::{button, column, container, row, scrollable, text, text_input, Space};
 use iced::{Alignment, Border, Color, Element, Length, Padding};
 
 use crate::theme::MayaColors;
@@ -12,7 +12,12 @@ pub enum LeftCodexMessage {
     SelectBranch(String),
     SelectTag(String),
     SelectStash(usize),
-    SproutBranch,
+    ToggleBranchInput,
+    NewBranchNameChanged(String),
+    ConfirmSproutBranch,
+    ToggleTagInput,
+    NewTagNameChanged(String),
+    ConfirmCreateTag,
     FetchRemote,
     CreateStash,
 }
@@ -24,6 +29,10 @@ pub struct LeftCodex {
     pub remote_branches: Vec<String>,
     pub tags: Vec<String>,
     pub stashes: Vec<String>,
+    pub is_sprouting_branch: bool,
+    pub new_branch_input: String,
+    pub is_inscribing_tag: bool,
+    pub new_tag_input: String,
 }
 
 impl Default for LeftCodex {
@@ -37,24 +46,14 @@ impl LeftCodex {
         Self {
             is_collapsed: false,
             active_branch: "main".to_string(),
-            local_branches: vec![
-                "main".to_string(),
-                "feat/cosmic-loom".to_string(),
-                "feat/dag-shader".to_string(),
-                "fix/altar-staging".to_string(),
-            ],
-            remote_branches: vec![
-                "origin/main".to_string(),
-                "origin/dev".to_string(),
-            ],
-            tags: vec![
-                "v0.1.0-genesis".to_string(),
-                "v0.2.0-stelae".to_string(),
-            ],
-            stashes: vec![
-                "cist@{0}: Sacred glyph ribbon WIP".to_string(),
-                "cist@{1}: Temporary shader experiments".to_string(),
-            ],
+            local_branches: vec!["main".to_string()],
+            remote_branches: vec!["origin/main".to_string()],
+            tags: Vec::new(),
+            stashes: Vec::new(),
+            is_sprouting_branch: false,
+            new_branch_input: "".to_string(),
+            is_inscribing_tag: false,
+            new_tag_input: "".to_string(),
         }
     }
 
@@ -78,7 +77,6 @@ impl LeftCodex {
             .into();
         }
 
-        // Expanded Stele Panel Header
         let header = row![
             text("📜 EL CÓDICE")
                 .size(13)
@@ -102,16 +100,9 @@ impl LeftCodex {
         .padding(Padding::from([8, 12]))
         .align_y(Alignment::Center);
 
-        // Section: Yaxche Branches
         let branches_section = self.render_branch_section();
-
-        // Section: Remotes
         let remotes_section = self.render_remote_section();
-
-        // Section: Tags
         let tags_section = self.render_tag_section();
-
-        // Section: Stashes
         let stashes_section = self.render_stash_section();
 
         let content_list = column![
@@ -157,11 +148,28 @@ impl LeftCodex {
                     background: Some(Color::TRANSPARENT.into()),
                     ..Default::default()
                 })
-                .on_press(LeftCodexMessage::SproutBranch.into()),
+                .on_press(LeftCodexMessage::ToggleBranchInput.into()),
         ]
         .align_y(Alignment::Center);
 
         let mut branch_items = column![section_title].spacing(2);
+
+        // Optional new branch prompt
+        if self.is_sprouting_branch {
+            let input_row = row![
+                text_input("Branch name...", &self.new_branch_input)
+                    .size(10)
+                    .padding(Padding::from([3, 6]))
+                    .on_input(|val| LeftCodexMessage::NewBranchNameChanged(val).into()),
+                button(text("✓").size(10).color(MayaColors::JADE_GLOW))
+                    .padding(Padding::from([2, 5]))
+                    .on_press(LeftCodexMessage::ConfirmSproutBranch.into()),
+            ]
+            .align_y(Alignment::Center)
+            .spacing(4);
+
+            branch_items = branch_items.push(input_row);
+        }
 
         for branch in &self.local_branches {
             let is_active = branch == &self.active_branch;
@@ -252,11 +260,38 @@ impl LeftCodex {
     fn render_tag_section<'a, Message: 'a + From<LeftCodexMessage> + Clone>(
         &'a self,
     ) -> Element<'a, Message> {
-        let section_title = text("🏷️ LAMAT (TAGS)")
-            .size(10)
-            .color(MayaColors::SOLAR_AMBER);
+        let section_title = row![
+            text("🏷️ LAMAT (TAGS)")
+                .size(10)
+                .color(MayaColors::SOLAR_AMBER),
+            Space::new().width(Length::Fill),
+            button(text("+").size(10).color(MayaColors::SOLAR_AMBER))
+                .padding(Padding::from([0, 4]))
+                .style(|_theme, _status| button::Style {
+                    background: Some(Color::TRANSPARENT.into()),
+                    ..Default::default()
+                })
+                .on_press(LeftCodexMessage::ToggleTagInput.into()),
+        ]
+        .align_y(Alignment::Center);
 
         let mut tag_items = column![section_title].spacing(2);
+
+        if self.is_inscribing_tag {
+            let input_row = row![
+                text_input("Tag name...", &self.new_tag_input)
+                    .size(10)
+                    .padding(Padding::from([3, 6]))
+                    .on_input(|val| LeftCodexMessage::NewTagNameChanged(val).into()),
+                button(text("✓").size(10).color(MayaColors::SOLAR_AMBER))
+                    .padding(Padding::from([2, 5]))
+                    .on_press(LeftCodexMessage::ConfirmCreateTag.into()),
+            ]
+            .align_y(Alignment::Center)
+            .spacing(4);
+
+            tag_items = tag_items.push(input_row);
+        }
 
         for tag in &self.tags {
             let item = button(

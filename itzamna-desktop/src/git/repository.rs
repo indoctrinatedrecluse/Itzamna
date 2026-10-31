@@ -1,6 +1,11 @@
-//! Git Sanctuary — Real repository reader powered by git2-rs
+//! Git Sanctuary — Real repository operations powered by git2-rs
 
-use git2::{BranchType, Repository, StatusOptions};
+use git2::{
+    BranchType, Commit, IndexAddOption, Oid, Repository, ResetType, Signature, StatusOptions,
+};
+use std::path::Path;
+
+use crate::git::detailed_commit::DetailedCommit;
 
 #[derive(Debug, Clone)]
 pub struct GitCommitNode {
@@ -72,6 +77,25 @@ impl GitSanctuary {
         }
 
         (local, remote)
+    }
+
+    pub fn get_tags(&self) -> Vec<String> {
+        let mut tags = Vec::new();
+        if let Ok(tag_names) = self.repo.tag_names(None) {
+            for tag in tag_names.iter().flatten() {
+                tags.push(tag.to_string());
+            }
+        }
+        tags
+    }
+
+    pub fn get_stashes(&mut self) -> Vec<String> {
+        let mut stashes = Vec::new();
+        let _ = self.repo.stash_foreach(|idx, name, _oid| {
+            stashes.push(format!("cist@{}: {}", idx, name));
+            true
+        });
+        stashes
     }
 
     pub fn get_status_files(&self) -> (Vec<FileStatus>, Vec<FileStatus>) {
@@ -148,7 +172,6 @@ impl GitSanctuary {
 
             let is_head = head_oid.map(|h| h == oid).unwrap_or(false);
 
-            // Simple topological lane routing
             let branch_lane = if idx == 0 || parents.len() <= 1 {
                 0
             } else {
@@ -181,5 +204,181 @@ impl GitSanctuary {
         }
 
         nodes
+    }
+
+    pub fn find_detailed_commit(&self, short_or_full_sha: &str) -> Option<DetailedCommit> {
+        let oid = if short_or_full_sha.len() == 40 {
+            Oid::from_str(short_or_full_sha).ok()?
+        } else {
+            let mut found = None;
+            if let Ok(mut revwalk) = self.repo.revwalk() {
+                let _ = revwalk.push_head();
+                for id in revwalk.flatten() {
+                    if id.to_string().starts_with(short_or_full_sha) {
+                        found = Some(id);
+                        break;
+                    }
+                }
+            }
+            found?
+        };
+
+        let commit = self.repo.find_commit(oid).ok()?;
+        Some(DetailedCommit::from_git2_commit(&self.repo, &commit))
+    }
+
+    // --- REAL STAGING & UNSTAGING OPERATIONS ---
+
+    pub fn stage_path(&self, path: &str) -> Result<(), String> {
+        let mut index = self.repo.index().map_err(|e| e.to_string())?;
+        index
+            .add_path(Path::new(path))
+            .map_err(|e| e.to_string())?;
+        index.write().map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn unstage_path(&self, path: &str) -> Result<(), String> {
+        let head = self.repo.head().map_err(|e| e.to_string())?;
+        let commit = head.peel_to_commit().map_err(|e| e.to_string())?;
+        self.repo
+            .reset_default(Some(&commit.into_object()), [Path::new(path)])
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn stage_all(&self) -> Result<(), String> {
+        let mut index = self.repo.index().map_err(|e| e.to_string())?;
+        index
+            .add_all(["*"], IndexAddOption::DEFAULT, None)
+            .map_err(|e| e.to_string())?;
+        index.write().map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn unstage_all(&self) -> Result<(), String> {
+        let head = self.repo.head().map_err(|e| e.to_string())?;
+        let commit = head.peel_to_commit().map_err(|e| e.to_string())?;
+        self.repo
+            .reset(commit.as_object(), ResetType::Mixed, None)
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn discard_changes(&self, path: &str) -> Result<(), String> {
+        let mut checkout = git2::build::CheckoutBuilder::new();
+        checkout.path(path).force();
+        self.repo
+            .checkout_head(Some(&mut checkout))
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    // --- REAL COMMIT CREATION ---
+
+    pub fn create_commit(&self, summary: &str, description: &str) -> Result<String, String> {
+        let mut index = self.repo.index().map_err(|e| e.to_string())?;
+        let tree_oid = index.write_tree().map_err(|e| e.to_string())?;
+        let tree = self.repo.find_tree(tree_oid).map_err(|e| e.to_string())?;
+
+        let sig = self
+            .repo
+            .signature()
+            .unwrap_or_else(|_| Signature::now("indoctrinatedrecluse", "recluse@itzamna.dev").unwrap());
+
+        let full_msg = if description.is_empty() {
+            summary.to_string()
+        } else {
+            format!("{}\n\n{}", summary, description)
+        };
+
+        let parent_commit = match self.repo.head() {
+            Ok(head) => head.peel_to_commit().ok(),
+            Err(_) => None,
+        };
+
+        let parents: Vec<&Commit> = match &parent_commit {
+            Some(c) => vec![c],
+            None => vec![],
+        };
+
+        let commit_oid = self
+            .repo
+            .commit(
+                Some("HEAD"),
+                &sig,
+                &sig,
+                &full_msg,
+                &tree,
+                &parents,
+            )
+            .map_err(|e| e.to_string())?;
+
+        Ok(commit_oid.to_string())
+    }
+
+    // --- REAL BRANCH OPERATIONS ---
+
+    pub fn switch_branch(&self, branch_name: &str) -> Result<(), String> {
+        let ref_name = format!("refs/heads/{}", branch_name);
+        let obj = self
+            .repo
+            .revparse_single(&ref_name)
+            .map_err(|e| e.to_string())?;
+
+        let mut checkout = git2::build::CheckoutBuilder::new();
+        checkout.safe();
+
+        self.repo
+            .checkout_tree(&obj, Some(&mut checkout))
+            .map_err(|e| e.to_string())?;
+
+        self.repo
+            .set_head(&ref_name)
+            .map_err(|e| e.to_string())?;
+
+        Ok(())
+    }
+
+    pub fn create_branch(&self, branch_name: &str) -> Result<(), String> {
+        let head = self.repo.head().map_err(|e| e.to_string())?;
+        let commit = head.peel_to_commit().map_err(|e| e.to_string())?;
+        self.repo
+            .branch(branch_name, &commit, false)
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn create_tag(&self, tag_name: &str) -> Result<(), String> {
+        let head = self.repo.head().map_err(|e| e.to_string())?;
+        let obj = head.peel_to_commit().map_err(|e| e.to_string())?.into_object();
+        let sig = self
+            .repo
+            .signature()
+            .unwrap_or_else(|_| Signature::now("indoctrinatedrecluse", "recluse@itzamna.dev").unwrap());
+
+        self.repo
+            .tag(tag_name, &obj, &sig, tag_name, false)
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn create_stash(&mut self, message: &str) -> Result<(), String> {
+        let sig = self
+            .repo
+            .signature()
+            .unwrap_or_else(|_| Signature::now("indoctrinatedrecluse", "recluse@itzamna.dev").unwrap());
+
+        self.repo
+            .stash_save(&sig, message, None)
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn pop_stash(&mut self, index: usize) -> Result<(), String> {
+        self.repo
+            .stash_pop(index, None)
+            .map_err(|e| e.to_string())?;
+        Ok(())
     }
 }

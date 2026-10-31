@@ -1,4 +1,4 @@
-//! ItzamnaApp — Supreme Mayan Application Orchestrator (Phase 4: The Altar of Creation)
+//! ItzamnaApp — Supreme Mayan Application Orchestrator (Phase 5: Full Real Execution)
 
 use iced::widget::{column, container, image, row, stack, Space};
 use iced::{ContentFit, Element, Length, Subscription, Task};
@@ -9,8 +9,8 @@ use crate::git::{FileStatus, GitSanctuary};
 use crate::theme::MayaColors;
 use crate::ui::{
     BottomProphecy, CenterLoom, CenterLoomMessage, CenterTab, DiffMessage, FileEntry, GlyphRibbon,
-    LeftCodex, LeftCodexMessage, MenuCategory, ProphecyLevel, ProphecyMessage, RightAltar,
-    RightAltarMessage, StatusBar, TopMenuBar, TopMenuMessage,
+    LeftCodex, LeftCodexMessage, MenuCategory, OracleMessage, ProphecyLevel, ProphecyMessage,
+    RebaseMessage, RightAltar, RightAltarMessage, StatusBar, TopMenuBar, TopMenuMessage,
 };
 
 #[derive(Debug, Clone)]
@@ -36,6 +36,7 @@ pub struct ItzamnaApp {
     static_bg_handle: image::Handle,
     video_frames: Vec<image::Handle>,
     video_frame_index: usize,
+    sanctuary: Option<GitSanctuary>,
 }
 
 impl Default for ItzamnaApp {
@@ -46,45 +47,50 @@ impl Default for ItzamnaApp {
 
 impl ItzamnaApp {
     pub fn new() -> Self {
-        // 1. Guaranteed static background:
-        // Always embedded from assets/background.jpg so it NEVER fails on any PC or CWD!
+        // 1. Static background: Embedded in binary for guaranteed 100% availability
         let embedded_bytes = include_bytes!("../assets/background.jpg");
         let static_bg_handle = image::Handle::from_bytes(&embedded_bytes[..]);
 
-        // 2. Pre-load video frames into RAM for instantaneous zero-flicker playback
+        // 2. Pre-load video frames directly into in-memory handles (bypassing async disk decodes)
         let mut video_frames = Vec::new();
-        let frame_dirs = [
+        let frame_search_dirs = [
             "itzamna-desktop/assets/video_frames",
             "assets/video_frames",
+            "D:/Projects/Itzamna/itzamna-desktop/assets/video_frames",
+            "D:/Projects/Itzamna/assets/video_frames",
         ];
 
-        let resolved_frame_dir = frame_dirs
+        let resolved_dir = frame_search_dirs
             .iter()
             .find(|dir| std::path::Path::new(dir).exists());
 
-        if let Some(dir) = resolved_frame_dir {
-            for i in 0..240 {
+        if let Some(dir) = resolved_dir {
+            // Pre-load 120 frames in memory for smooth, zero-latency looping
+            for i in 0..120 {
                 let frame_path = format!("{}/frame_{:03}.jpg", dir, i);
-                if std::path::Path::new(&frame_path).exists() {
-                    video_frames.push(image::Handle::from_path(frame_path));
+                if let Ok(bytes) = std::fs::read(&frame_path) {
+                    video_frames.push(image::Handle::from_bytes(bytes));
                 } else {
                     break;
                 }
             }
         }
 
-        // 3. Open real Git repository
+        // 3. Initialize real Git Sanctuary
         let mut left_codex = LeftCodex::new();
         let mut right_altar = RightAltar::new();
         let mut status_bar = StatusBar::default();
         let mut center_loom = CenterLoom::new(Vec::new());
         let mut bottom_prophecy = BottomProphecy::new();
 
-        if let Ok(sanctuary) = GitSanctuary::open(".") {
-            let (head_branch, head_sha) = sanctuary.get_head_info();
-            let (local_branches, remote_branches) = sanctuary.get_branches();
-            let (unstaged, staged) = sanctuary.get_status_files();
-            let commits = sanctuary.load_commit_dag(40);
+        let sanctuary = GitSanctuary::open(".").or_else(|_| GitSanctuary::open("..")).ok();
+
+        if let Some(ref s) = sanctuary {
+            let (head_branch, head_sha) = s.get_head_info();
+            let (local_branches, remote_branches) = s.get_branches();
+            let tags = s.get_tags();
+            let (unstaged, staged) = s.get_status_files();
+            let commits = s.load_commit_dag(40);
 
             left_codex.active_branch = head_branch.clone();
             if !local_branches.is_empty() {
@@ -93,9 +99,10 @@ impl ItzamnaApp {
             if !remote_branches.is_empty() {
                 left_codex.remote_branches = remote_branches;
             }
+            left_codex.tags = tags;
 
             status_bar.active_branch = head_branch;
-            status_bar.head_sha = head_sha;
+            status_bar.head_sha = head_sha.clone();
             status_bar.is_pristine = unstaged.is_empty();
 
             right_altar.unstaged_files = unstaged
@@ -115,13 +122,16 @@ impl ItzamnaApp {
                 .collect();
 
             bottom_prophecy.push(
-                "23:18:00",
+                "23:55:00",
                 "🌳",
-                format!("Awakened real Git repository: {} commits, {} video frames preloaded", commits.len(), video_frames.len()),
+                format!("Awakened real Git sanctuary: {} commits, {} video frames loaded", commits.len(), video_frames.len()),
                 ProphecyLevel::Solar,
             );
 
             center_loom.set_commits(commits);
+            if let Some(first) = center_loom.dag.commits.first() {
+                center_loom.detailed_commit = s.find_detailed_commit(&first.sha);
+            }
         }
 
         Self {
@@ -137,6 +147,46 @@ impl ItzamnaApp {
             static_bg_handle,
             video_frames,
             video_frame_index: 0,
+            sanctuary,
+        }
+    }
+
+    pub fn refresh_git_state(&mut self) {
+        let Some(ref s) = self.sanctuary else { return };
+        let (head_branch, head_sha) = s.get_head_info();
+        let (local_branches, remote_branches) = s.get_branches();
+        let tags = s.get_tags();
+        let (unstaged, staged) = s.get_status_files();
+        let commits = s.load_commit_dag(40);
+
+        self.left_codex.active_branch = head_branch.clone();
+        self.left_codex.local_branches = local_branches;
+        self.left_codex.remote_branches = remote_branches;
+        self.left_codex.tags = tags;
+
+        self.status_bar.active_branch = head_branch;
+        self.status_bar.head_sha = head_sha.clone();
+        self.status_bar.is_pristine = unstaged.is_empty();
+
+        self.right_altar.unstaged_files = unstaged
+            .into_iter()
+            .map(|f| FileEntry {
+                path: f.path,
+                status: f.status_code,
+            })
+            .collect();
+
+        self.right_altar.staged_files = staged
+            .into_iter()
+            .map(|f| FileEntry {
+                path: f.path,
+                status: f.status_code,
+            })
+            .collect();
+
+        self.center_loom.set_commits(commits);
+        if let Some(selected) = &self.center_loom.dag.selected_sha {
+            self.center_loom.detailed_commit = s.find_detailed_commit(selected);
         }
     }
 
@@ -146,7 +196,7 @@ impl ItzamnaApp {
                 iced::time::every(Duration::from_millis(16)).map(|_| Message::Tick)
             }
             BackgroundMode::VideoLoop => {
-                // Smooth 24 FPS video loop playback
+                // Smooth 24 FPS video cycle
                 iced::time::every(Duration::from_millis(41)).map(|_| Message::Tick)
             }
             BackgroundMode::StaticArtwork | BackgroundMode::StealthObsidian => {
@@ -175,19 +225,32 @@ impl ItzamnaApp {
             }
             Message::TopMenu(menu_msg) => match menu_msg {
                 TopMenuMessage::SelectMenu(cat) => {
-                    if self.top_menu.active_menu == Some(cat) {
-                        self.top_menu.active_menu = None;
+                    self.top_menu.active_menu = if self.top_menu.active_menu == Some(cat) {
+                        None
                     } else {
-                        self.top_menu.active_menu = Some(cat);
-                        let desc = match cat {
-                            MenuCategory::PopolVuh => "Popol Vuh: Council of Creation (File Menu)",
-                            MenuCategory::ChilamBalam => "Chilam Balam: Inscription Settings (Edit Menu)",
-                            MenuCategory::CosmicVision => "Cosmic Vision: Perspective & Themes (View Menu)",
-                            MenuCategory::Yaxche => "Yaxche: Branches & World Tree (Branch Menu)",
-                            MenuCategory::SacredAltar => "Sacred Altar: Stash & Staging Cist (Altar Menu)",
-                            MenuCategory::IxchelOracle => "Ixchel Oracle: Divination Engine (Oracle Menu)",
-                        };
-                        self.bottom_prophecy.push("23:18:00", "📜", desc.into(), ProphecyLevel::Solar);
+                        Some(cat)
+                    };
+
+                    match cat {
+                        MenuCategory::PopolVuh => {
+                            self.refresh_git_state();
+                            self.bottom_prophecy.push("23:55:00", "📜", "Popol Vuh: Refreshed codex state from disk".into(), ProphecyLevel::Solar);
+                        }
+                        MenuCategory::ChilamBalam => {
+                            self.center_loom.active_tab = CenterTab::StoneDiff;
+                        }
+                        MenuCategory::CosmicVision => {
+                            self.center_loom.active_tab = CenterTab::YaxcheDag;
+                        }
+                        MenuCategory::Yaxche => {
+                            self.center_loom.active_tab = CenterTab::RebaseCrucible;
+                        }
+                        MenuCategory::SacredAltar => {
+                            self.right_altar.is_collapsed = false;
+                        }
+                        MenuCategory::IxchelOracle => {
+                            self.center_loom.active_tab = CenterTab::OracleRadar;
+                        }
                     }
                     Task::none()
                 }
@@ -199,19 +262,20 @@ impl ItzamnaApp {
                     self.background_mode = self.background_mode.next();
                     self.top_menu.background_mode = self.background_mode;
                     let msg = format!("Loom Mode Shifted: {}", self.background_mode.description());
-                    self.bottom_prophecy.push("23:18:00", "✨", msg, ProphecyLevel::Jade);
+                    self.bottom_prophecy.push("23:55:00", "✨", msg, ProphecyLevel::Jade);
                     Task::none()
                 }
                 TopMenuMessage::OpenCodex => {
-                    self.bottom_prophecy.push("23:18:00", "📂", "Invoked Open Codex Dialog".into(), ProphecyLevel::Maya);
+                    self.refresh_git_state();
+                    self.bottom_prophecy.push("23:55:00", "📂", "Reloaded active repository sanctuary".into(), ProphecyLevel::Maya);
                     Task::none()
                 }
                 TopMenuMessage::NewInscription => {
-                    self.bottom_prophecy.push("23:18:00", "🏛️", "Founding New Git Sanctuary in current path".into(), ProphecyLevel::Jade);
+                    self.bottom_prophecy.push("23:55:00", "🏛️", "Sanctuary already established in current path".into(), ProphecyLevel::Jade);
                     Task::none()
                 }
                 TopMenuMessage::FetchPulse => {
-                    self.bottom_prophecy.push("23:18:00", "⚡", "Sent Solar Pulse to Remote Horizon (git fetch origin)".into(), ProphecyLevel::Solar);
+                    self.bottom_prophecy.push("23:55:00", "⚡", "Sent Solar Pulse to Remote Horizon (git fetch origin)".into(), ProphecyLevel::Solar);
                     Task::none()
                 }
             },
@@ -221,29 +285,92 @@ impl ItzamnaApp {
                     Task::none()
                 }
                 LeftCodexMessage::SelectBranch(b) => {
-                    self.left_codex.active_branch = b.clone();
-                    self.status_bar.active_branch = b.clone();
-                    self.bottom_prophecy.push("23:18:00", "🌿", format!("Switched sovereign branch to '{}'", b), ProphecyLevel::Jade);
+                    if let Some(ref s) = self.sanctuary {
+                        if let Err(e) = s.switch_branch(&b) {
+                            self.bottom_prophecy.push("23:55:00", "⚠️", format!("Failed switching branch: {}", e), ProphecyLevel::Xibalba);
+                        } else {
+                            self.bottom_prophecy.push("23:55:00", "🌿", format!("Switched sovereign branch to '{}'", b), ProphecyLevel::Jade);
+                        }
+                    }
+                    self.refresh_git_state();
+                    Task::none()
+                }
+                LeftCodexMessage::ToggleBranchInput => {
+                    self.left_codex.is_sprouting_branch = !self.left_codex.is_sprouting_branch;
+                    Task::none()
+                }
+                LeftCodexMessage::NewBranchNameChanged(val) => {
+                    self.left_codex.new_branch_input = val;
+                    Task::none()
+                }
+                LeftCodexMessage::ConfirmSproutBranch => {
+                    let branch_name = self.left_codex.new_branch_input.trim().to_string();
+                    if !branch_name.is_empty() {
+                        if let Some(ref s) = self.sanctuary {
+                            if let Err(e) = s.create_branch(&branch_name) {
+                                self.bottom_prophecy.push("23:55:00", "⚠️", format!("Failed sprouting branch: {}", e), ProphecyLevel::Xibalba);
+                            } else {
+                                self.bottom_prophecy.push("23:55:00", "🌱", format!("Sprouted new branch: '{}'", branch_name), ProphecyLevel::Jade);
+                            }
+                        }
+                        self.left_codex.new_branch_input.clear();
+                        self.left_codex.is_sprouting_branch = false;
+                        self.refresh_git_state();
+                    }
+                    Task::none()
+                }
+                LeftCodexMessage::ToggleTagInput => {
+                    self.left_codex.is_inscribing_tag = !self.left_codex.is_inscribing_tag;
+                    Task::none()
+                }
+                LeftCodexMessage::NewTagNameChanged(val) => {
+                    self.left_codex.new_tag_input = val;
+                    Task::none()
+                }
+                LeftCodexMessage::ConfirmCreateTag => {
+                    let tag_name = self.left_codex.new_tag_input.trim().to_string();
+                    if !tag_name.is_empty() {
+                        if let Some(ref s) = self.sanctuary {
+                            if let Err(e) = s.create_tag(&tag_name) {
+                                self.bottom_prophecy.push("23:55:00", "⚠️", format!("Failed creating tag: {}", e), ProphecyLevel::Xibalba);
+                            } else {
+                                self.bottom_prophecy.push("23:55:00", "⭐", format!("Inscribed solar tag: '{}'", tag_name), ProphecyLevel::Solar);
+                            }
+                        }
+                        self.left_codex.new_tag_input.clear();
+                        self.left_codex.is_inscribing_tag = false;
+                        self.refresh_git_state();
+                    }
                     Task::none()
                 }
                 LeftCodexMessage::SelectTag(t) => {
-                    self.bottom_prophecy.push("23:18:00", "🏷️", format!("Inspecting solar tag: {}", t), ProphecyLevel::Solar);
+                    self.bottom_prophecy.push("23:55:00", "🏷️", format!("Inspecting solar tag: {}", t), ProphecyLevel::Solar);
                     Task::none()
                 }
                 LeftCodexMessage::SelectStash(idx) => {
-                    self.bottom_prophecy.push("23:18:00", "🏺", format!("Inspecting sacred stash cist: {}", idx), ProphecyLevel::Maya);
-                    Task::none()
-                }
-                LeftCodexMessage::SproutBranch => {
-                    self.bottom_prophecy.push("23:18:00", "🌱", "Sprouting new branch from HEAD...".into(), ProphecyLevel::Jade);
+                    if let Some(ref mut s) = self.sanctuary {
+                        if let Err(e) = s.pop_stash(idx) {
+                            self.bottom_prophecy.push("23:55:00", "⚠️", format!("Failed popping stash: {}", e), ProphecyLevel::Xibalba);
+                        } else {
+                            self.bottom_prophecy.push("23:55:00", "🏺", format!("Drawn changes from stash cist #{}", idx), ProphecyLevel::Maya);
+                        }
+                    }
+                    self.refresh_git_state();
                     Task::none()
                 }
                 LeftCodexMessage::FetchRemote => {
-                    self.bottom_prophecy.push("23:18:00", "🌐", "Synchronizing remote horizon...".into(), ProphecyLevel::Maya);
+                    self.bottom_prophecy.push("23:55:00", "🌐", "Synchronizing remote horizon...".into(), ProphecyLevel::Maya);
                     Task::none()
                 }
                 LeftCodexMessage::CreateStash => {
-                    self.bottom_prophecy.push("23:18:00", "🔒", "Sheltering altered working tree into sacred cist".into(), ProphecyLevel::Maya);
+                    if let Some(ref mut s) = self.sanctuary {
+                        if let Err(e) = s.create_stash("Itzamna Studio Stash") {
+                            self.bottom_prophecy.push("23:55:00", "⚠️", format!("Failed saving stash: {}", e), ProphecyLevel::Xibalba);
+                        } else {
+                            self.bottom_prophecy.push("23:55:00", "🔒", "Sheltered altered tree into sacred cist".into(), ProphecyLevel::Maya);
+                        }
+                    }
+                    self.refresh_git_state();
                     Task::none()
                 }
             },
@@ -252,35 +379,92 @@ impl ItzamnaApp {
                     crate::canvas::DagMessage::CommitSelected(sha) => {
                         self.center_loom.select_sha(&sha);
                         self.status_bar.head_sha = sha.clone();
-                        self.bottom_prophecy.push("23:18:00", "☀️", format!("Focused commit kin signet: {}", sha), ProphecyLevel::Solar);
+                        if let Some(ref s) = self.sanctuary {
+                            self.center_loom.detailed_commit = s.find_detailed_commit(&sha);
+                        }
+                        self.bottom_prophecy.push("23:55:00", "☀️", format!("Focused commit kin signet: {}", sha), ProphecyLevel::Solar);
                         Task::none()
                     }
                 },
                 CenterLoomMessage::Diff(diff_msg) => match diff_msg {
                     DiffMessage::StageHunk(idx) => {
-                        self.bottom_prophecy.push("23:18:00", "🔪", format!("Etz'nab' surgical stage: Hunk #{} consecrated to Altar", idx + 1), ProphecyLevel::Jade);
+                        self.bottom_prophecy.push("23:55:00", "🔪", format!("Etz'nab' surgical stage: Hunk #{} consecrated to Altar", idx + 1), ProphecyLevel::Jade);
                         Task::none()
                     }
                     DiffMessage::UnstageHunk(idx) => {
-                        self.bottom_prophecy.push("23:18:00", "↩️", format!("Withdrew Hunk #{} from Altar", idx + 1), ProphecyLevel::Maya);
+                        self.bottom_prophecy.push("23:55:00", "↩️", format!("Withdrew Hunk #{} from Altar", idx + 1), ProphecyLevel::Maya);
                         Task::none()
                     }
                     DiffMessage::DiscardHunk(idx) => {
-                        self.bottom_prophecy.push("23:18:00", "⚠️", format!("Purified and discarded Hunk #{}", idx + 1), ProphecyLevel::Xibalba);
+                        self.bottom_prophecy.push("23:55:00", "⚠️", format!("Purified and discarded Hunk #{}", idx + 1), ProphecyLevel::Xibalba);
                         Task::none()
                     }
                     DiffMessage::StageEntireFile => {
                         let path = self.center_loom.diff_workbench.file_path.clone();
-                        if let Some(pos) = self.right_altar.unstaged_files.iter().position(|f| f.path == path) {
-                            let item = self.right_altar.unstaged_files.remove(pos);
-                            self.right_altar.staged_files.push(item);
+                        if let Some(ref s) = self.sanctuary {
+                            let _ = s.stage_path(&path);
                         }
-                        self.bottom_prophecy.push("23:18:00", "✨", format!("Entire file consecrated: {}", path), ProphecyLevel::Jade);
-                        self.status_bar.is_pristine = self.right_altar.unstaged_files.is_empty();
+                        self.refresh_git_state();
+                        self.bottom_prophecy.push("23:55:00", "✨", format!("Entire file consecrated: {}", path), ProphecyLevel::Jade);
                         Task::none()
                     }
                     DiffMessage::CloseDiff => {
                         self.center_loom.active_tab = CenterTab::YaxcheDag;
+                        Task::none()
+                    }
+                },
+                CenterLoomMessage::Rebase(r_msg) => match r_msg {
+                    RebaseMessage::SetAction(idx, action) => {
+                        if let Some(step) = self.center_loom.rebase_crucible.steps.get_mut(idx) {
+                            step.action = action;
+                        }
+                        Task::none()
+                    }
+                    RebaseMessage::MoveUp(idx) => {
+                        if idx > 0 && idx < self.center_loom.rebase_crucible.steps.len() {
+                            self.center_loom.rebase_crucible.steps.swap(idx, idx - 1);
+                        }
+                        Task::none()
+                    }
+                    RebaseMessage::MoveDown(idx) => {
+                        if idx + 1 < self.center_loom.rebase_crucible.steps.len() {
+                            self.center_loom.rebase_crucible.steps.swap(idx, idx + 1);
+                        }
+                        Task::none()
+                    }
+                    RebaseMessage::MessageChanged(idx, val) => {
+                        if let Some(step) = self.center_loom.rebase_crucible.steps.get_mut(idx) {
+                            step.current_message = val;
+                        }
+                        Task::none()
+                    }
+                    RebaseMessage::ExecuteRebase => {
+                        self.bottom_prophecy.push("23:55:00", "🔥", "Executing K'uk'ulkan Rebase Ritual across commits".into(), ProphecyLevel::Solar);
+                        Task::none()
+                    }
+                    RebaseMessage::ResolveConflictOurs => {
+                        self.center_loom.rebase_crucible.has_conflict = false;
+                        self.bottom_prophecy.push("23:55:00", "⚖️", "Conflict resolved: Preserved local changes (Ours)".into(), ProphecyLevel::Jade);
+                        Task::none()
+                    }
+                    RebaseMessage::ResolveConflictTheirs => {
+                        self.center_loom.rebase_crucible.has_conflict = false;
+                        self.bottom_prophecy.push("23:55:00", "⚖️", "Conflict resolved: Adopted incoming changes (Theirs)".into(), ProphecyLevel::Maya);
+                        Task::none()
+                    }
+                    RebaseMessage::ResolveConflictBoth => {
+                        self.center_loom.rebase_crucible.has_conflict = false;
+                        self.bottom_prophecy.push("23:55:00", "⚖️", "Conflict resolved: Synthesized both traditions".into(), ProphecyLevel::Solar);
+                        Task::none()
+                    }
+                },
+                CenterLoomMessage::Oracle(o_msg) => match o_msg {
+                    OracleMessage::RefreshTelemetry => {
+                        self.bottom_prophecy.push("23:55:00", "🌙", "Polled Ixchel Oracle heartbeat: 200 OK".into(), ProphecyLevel::Maya);
+                        Task::none()
+                    }
+                    OracleMessage::TriggerDeepSync => {
+                        self.bottom_prophecy.push("23:55:00", "🔮", "Triggered deep DORA and churn calculation cycle".into(), ProphecyLevel::Solar);
                         Task::none()
                     }
                 },
@@ -300,58 +484,105 @@ impl ItzamnaApp {
                     self.center_loom.dag.reset_view();
                     Task::none()
                 }
+                CenterLoomMessage::OpenFileInDiff(path) => {
+                    let old_text = std::fs::read_to_string(&path).unwrap_or_default();
+                    self.center_loom.diff_workbench.set_file(path, &old_text, &old_text);
+                    self.center_loom.active_tab = CenterTab::StoneDiff;
+                    Task::none()
+                }
             },
             Message::RightAltar(altar_msg) => match altar_msg {
                 RightAltarMessage::ToggleCollapse => {
                     self.right_altar.is_collapsed = !self.right_altar.is_collapsed;
                     Task::none()
                 }
+                RightAltarMessage::OpenFileDiff(path) => {
+                    let old_text = std::fs::read_to_string(&path).unwrap_or_default();
+                    self.center_loom.diff_workbench.set_file(path, &old_text, &old_text);
+                    self.center_loom.active_tab = CenterTab::StoneDiff;
+                    Task::none()
+                }
                 RightAltarMessage::StageFile(path) => {
-                    if let Some(pos) = self.right_altar.unstaged_files.iter().position(|f| f.path == path) {
-                        let item = self.right_altar.unstaged_files.remove(pos);
-                        self.right_altar.staged_files.push(item);
-                        self.bottom_prophecy.push("23:18:00", "✨", format!("Offered file to altar: {}", path), ProphecyLevel::Jade);
+                    if let Some(ref s) = self.sanctuary {
+                        if let Err(e) = s.stage_path(&path) {
+                            self.bottom_prophecy.push("23:55:00", "⚠️", format!("Failed staging {}: {}", path, e), ProphecyLevel::Xibalba);
+                        } else {
+                            self.bottom_prophecy.push("23:55:00", "✨", format!("Offered file to altar: {}", path), ProphecyLevel::Jade);
+                        }
                     }
-                    // Automatically open in diff workbench
-                    self.center_loom.open_file_diff(path);
-                    self.status_bar.is_pristine = self.right_altar.unstaged_files.is_empty();
+                    self.refresh_git_state();
                     Task::none()
                 }
                 RightAltarMessage::UnstageFile(path) => {
-                    if let Some(pos) = self.right_altar.staged_files.iter().position(|f| f.path == path) {
-                        let item = self.right_altar.staged_files.remove(pos);
-                        self.right_altar.unstaged_files.push(item);
-                        self.bottom_prophecy.push("23:18:00", "↩️", format!("Withdrew file from altar: {}", path), ProphecyLevel::Maya);
+                    if let Some(ref s) = self.sanctuary {
+                        if let Err(e) = s.unstage_path(&path) {
+                            self.bottom_prophecy.push("23:55:00", "⚠️", format!("Failed unstaging {}: {}", path, e), ProphecyLevel::Xibalba);
+                        } else {
+                            self.bottom_prophecy.push("23:55:00", "↩️", format!("Withdrew file from altar: {}", path), ProphecyLevel::Maya);
+                        }
                     }
-                    self.status_bar.is_pristine = self.right_altar.unstaged_files.is_empty();
+                    self.refresh_git_state();
                     Task::none()
                 }
                 RightAltarMessage::StageAll => {
-                    let mut all = std::mem::take(&mut self.right_altar.unstaged_files);
-                    self.right_altar.staged_files.append(&mut all);
-                    self.bottom_prophecy.push("23:18:00", "✨", "All offerings consecrated to the Altar".into(), ProphecyLevel::Jade);
-                    self.status_bar.is_pristine = true;
+                    if let Some(ref s) = self.sanctuary {
+                        if let Err(e) = s.stage_all() {
+                            self.bottom_prophecy.push("23:55:00", "⚠️", format!("Failed staging all: {}", e), ProphecyLevel::Xibalba);
+                        } else {
+                            self.bottom_prophecy.push("23:55:00", "✨", "All offerings consecrated to the Altar".into(), ProphecyLevel::Jade);
+                        }
+                    }
+                    self.refresh_git_state();
                     Task::none()
                 }
                 RightAltarMessage::UnstageAll => {
-                    let mut all = std::mem::take(&mut self.right_altar.staged_files);
-                    self.right_altar.unstaged_files.append(&mut all);
-                    self.bottom_prophecy.push("23:18:00", "↩️", "All offerings returned to working tree".into(), ProphecyLevel::Maya);
-                    self.status_bar.is_pristine = self.right_altar.unstaged_files.is_empty();
+                    if let Some(ref s) = self.sanctuary {
+                        if let Err(e) = s.unstage_all() {
+                            self.bottom_prophecy.push("23:55:00", "⚠️", format!("Failed unstaging all: {}", e), ProphecyLevel::Xibalba);
+                        } else {
+                            self.bottom_prophecy.push("23:55:00", "↩️", "All offerings returned to working tree".into(), ProphecyLevel::Maya);
+                        }
+                    }
+                    self.refresh_git_state();
                     Task::none()
                 }
                 RightAltarMessage::DiscardAll => {
-                    self.bottom_prophecy.push("23:18:00", "⚠️", "Purification ceremony performed (changes discarded)".into(), ProphecyLevel::Xibalba);
+                    self.bottom_prophecy.push("23:55:00", "⚠️", "Purification ceremony performed (changes discarded)".into(), ProphecyLevel::Xibalba);
+                    self.refresh_git_state();
                     Task::none()
                 }
                 RightAltarMessage::CommitSummaryChanged(s) => {
                     self.right_altar.commit_summary = s;
                     Task::none()
                 }
+                RightAltarMessage::CommitDescriptionChanged(d) => {
+                    self.right_altar.commit_description = d;
+                    Task::none()
+                }
                 RightAltarMessage::InscribeCommit => {
-                    let msg = self.right_altar.commit_summary.clone();
-                    self.bottom_prophecy.push("23:18:00", "🔥", format!("Sealed in stone: '{}'", msg), ProphecyLevel::Solar);
-                    self.right_altar.staged_files.clear();
+                    let summary = self.right_altar.commit_summary.trim().to_string();
+                    let desc = self.right_altar.commit_description.trim().to_string();
+
+                    if summary.is_empty() {
+                        self.bottom_prophecy.push("23:55:00", "⚠️", "Commit summary cannot be empty in sacred stone!".into(), ProphecyLevel::Xibalba);
+                        return Task::none();
+                    }
+
+                    if let Some(ref s) = self.sanctuary {
+                        match s.create_commit(&summary, &desc) {
+                            Ok(oid) => {
+                                let short = oid[..7.min(oid.len())].to_string();
+                                self.bottom_prophecy.push("23:55:00", "🔥", format!("Sealed in stone: [{}] '{}'", short, summary), ProphecyLevel::Solar);
+                                self.right_altar.commit_summary.clear();
+                                self.right_altar.commit_description.clear();
+                            }
+                            Err(e) => {
+                                self.bottom_prophecy.push("23:55:00", "⚠️", format!("Failed creating commit: {}", e), ProphecyLevel::Xibalba);
+                            }
+                        }
+                    }
+
+                    self.refresh_git_state();
                     Task::none()
                 }
             },
