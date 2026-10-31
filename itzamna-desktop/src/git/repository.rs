@@ -1,11 +1,49 @@
 //! Git Sanctuary — Real repository operations powered by git2-rs
 
 use git2::{
-    BranchType, Commit, IndexAddOption, Oid, Repository, ResetType, Signature, StatusOptions,
+    BlameOptions, BranchType, Commit, IndexAddOption, Oid, Repository, ResetType, Signature,
+    StatusOptions,
 };
 use std::path::Path;
 
 use crate::git::detailed_commit::DetailedCommit;
+
+#[derive(Debug, Clone)]
+pub struct BlameLineInfo {
+    pub line_no: usize,
+    pub commit_sha: String,
+    pub short_sha: String,
+    pub author_name: String,
+    pub author_email: String,
+    pub time_secs: i64,
+    pub relative_time: String,
+    pub code_content: String,
+    pub age_heat: f32, // 0.0 (aged/ancient) to 1.0 (recent/radiant)
+}
+
+#[derive(Debug, Clone)]
+pub struct ReflogEntryInfo {
+    pub index: usize,
+    pub old_sha: String,
+    pub new_sha: String,
+    pub committer_name: String,
+    pub message: String,
+    pub action_type: &'static str,
+}
+
+#[derive(Debug, Clone)]
+pub struct StashEntryDetail {
+    pub index: usize,
+    pub message: String,
+    pub commit_sha: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MergeStrategy {
+    FastForward,
+    NoFastForward,
+    Squash,
+}
 
 #[derive(Debug, Clone)]
 pub struct GitCommitNode {
@@ -380,5 +418,305 @@ impl GitSanctuary {
             .stash_pop(index, None)
             .map_err(|e| e.to_string())?;
         Ok(())
+    }
+
+    // --- PHASE 6: PANTHEON OF RITUALS SUITE ---
+
+    /// 1. The Ahau Lineage: Interactive Git Blame & Heatmap
+    pub fn blame_file(&self, file_path: &str) -> Result<Vec<BlameLineInfo>, String> {
+        let mut opts = BlameOptions::new();
+        let blame = self
+            .repo
+            .blame_file(Path::new(file_path), Some(&mut opts))
+            .map_err(|e| e.to_string())?;
+
+        let file_content = std::fs::read_to_string(file_path).unwrap_or_default();
+        let lines: Vec<&str> = file_content.lines().collect();
+
+        let now = chrono::Utc::now().timestamp();
+        let mut result = Vec::new();
+
+        for (idx, line_str) in lines.iter().enumerate() {
+            let line_no = idx + 1;
+            if let Some(hunk) = blame.get_line(line_no) {
+                let sig = hunk.final_signature();
+                let commit_oid = hunk.final_commit_id();
+                let sha = commit_oid.to_string();
+                let short_sha = sha[..7.min(sha.len())].to_string();
+
+                let author_name = sig.name().unwrap_or("Sacred Architect").to_string();
+                let author_email = sig.email().unwrap_or("architect@itzamna.dev").to_string();
+                let time_secs = sig.when().seconds();
+                let age_days = ((now - time_secs) / 86400).max(0);
+
+                let relative_time = if age_days == 0 {
+                    "Today".to_string()
+                } else if age_days == 1 {
+                    "Yesterday".to_string()
+                } else if age_days < 30 {
+                    format!("{}d ago", age_days)
+                } else if age_days < 365 {
+                    format!("{}mo ago", age_days / 30)
+                } else {
+                    format!("{}y ago", age_days / 365)
+                };
+
+                // Age heat: 1.0 (recent, <7 days) to 0.0 (ancient, >365 days)
+                let age_heat = (1.0 - (age_days as f32 / 365.0)).clamp(0.05, 1.0);
+
+                result.push(BlameLineInfo {
+                    line_no,
+                    commit_sha: sha,
+                    short_sha,
+                    author_name,
+                    author_email,
+                    time_secs,
+                    relative_time,
+                    code_content: line_str.to_string(),
+                    age_heat,
+                });
+            } else {
+                result.push(BlameLineInfo {
+                    line_no,
+                    commit_sha: "0000000".to_string(),
+                    short_sha: "0000000".to_string(),
+                    author_name: "Uncommitted".to_string(),
+                    author_email: "".to_string(),
+                    time_secs: now,
+                    relative_time: "Now".to_string(),
+                    code_content: line_str.to_string(),
+                    age_heat: 1.0,
+                });
+            }
+        }
+
+        Ok(result)
+    }
+
+    /// 2. The Xibalba Mirror: Visual Reflog & Time Travel
+    pub fn get_reflog(&self) -> Result<Vec<ReflogEntryInfo>, String> {
+        let reflog = self.repo.reflog("HEAD").map_err(|e| e.to_string())?;
+        let mut entries = Vec::new();
+
+        for (idx, entry) in reflog.iter().enumerate() {
+            let msg = entry.message().unwrap_or("State shift").to_string();
+            let action_type = if msg.starts_with("checkout:") {
+                "checkout"
+            } else if msg.starts_with("commit:") || msg.starts_with("commit (initial):") {
+                "commit"
+            } else if msg.starts_with("rebase:") {
+                "rebase"
+            } else if msg.starts_with("reset:") {
+                "reset"
+            } else if msg.starts_with("merge:") {
+                "merge"
+            } else {
+                "ritual"
+            };
+
+            entries.push(ReflogEntryInfo {
+                index: idx,
+                old_sha: entry.id_old().to_string()[..7].to_string(),
+                new_sha: entry.id_new().to_string()[..7].to_string(),
+                committer_name: entry.committer().name().unwrap_or("Architect").to_string(),
+                message: msg,
+                action_type,
+            });
+        }
+
+        Ok(entries)
+    }
+
+    /// Reset HEAD to a given commit or reflog target
+    pub fn reset_head(&self, target_sha: &str, reset_type: ResetType) -> Result<(), String> {
+        let obj = self.repo.revparse_single(target_sha).map_err(|e| e.to_string())?;
+        self.repo.reset(&obj, reset_type, None).map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    /// 3. The Popol Vuh Chronicle: Advanced Commit Search
+    pub fn search_chronicle(&self, query: &str, author_filter: &str) -> Vec<GitCommitNode> {
+        let all_commits = self.load_commit_dag(100);
+        let q_lower = query.to_lowercase();
+        let auth_lower = author_filter.to_lowercase();
+
+        all_commits
+            .into_iter()
+            .filter(|c| {
+                let matches_query = q_lower.is_empty()
+                    || c.summary.to_lowercase().contains(&q_lower)
+                    || c.short_sha.to_lowercase().contains(&q_lower)
+                    || c.sha.to_lowercase().contains(&q_lower);
+
+                let matches_author = auth_lower.is_empty()
+                    || c.author_name.to_lowercase().contains(&auth_lower)
+                    || c.author_email.to_lowercase().contains(&auth_lower);
+
+                matches_query && matches_author
+            })
+            .collect()
+    }
+
+    /// 4. The K'uk'ulkan Confluence: Branch Merging & Cherry-Picking
+    pub fn merge_branch(&self, target_branch: &str, strategy: MergeStrategy) -> Result<String, String> {
+        let ref_name = format!("refs/heads/{}", target_branch);
+        let target_commit = self
+            .repo
+            .revparse_single(&ref_name)
+            .map_err(|e| format!("Branch '{}' not found: {}", target_branch, e))?
+            .peel_to_commit()
+            .map_err(|e| e.to_string())?;
+
+        let head = self.repo.head().map_err(|e| e.to_string())?;
+        let head_commit = head.peel_to_commit().map_err(|e| e.to_string())?;
+
+        let _head_annotated = self.repo.find_annotated_commit(head_commit.id()).map_err(|e| e.to_string())?;
+        let target_annotated = self.repo.find_annotated_commit(target_commit.id()).map_err(|e| e.to_string())?;
+
+        let (analysis, _preference) = self
+            .repo
+            .merge_analysis_for_ref(&head, &[&target_annotated])
+            .map_err(|e| e.to_string())?;
+
+        if analysis.is_up_to_date() {
+            return Ok("Already up to date: branches are in harmony.".to_string());
+        }
+
+        if analysis.is_fast_forward() && strategy == MergeStrategy::FastForward {
+            let mut checkout = git2::build::CheckoutBuilder::new();
+            checkout.safe();
+            self.repo.checkout_tree(target_commit.as_object(), Some(&mut checkout)).map_err(|e| e.to_string())?;
+            let mut head_ref = self.repo.head().map_err(|e| e.to_string())?;
+            head_ref.set_target(target_commit.id(), &format!("Fast-Forward to {}", target_branch)).map_err(|e| e.to_string())?;
+            return Ok(format!("Fast-Forwarded sovereign branch to [{}]", &target_commit.id().to_string()[..7]));
+        }
+
+        // Three-way merge or squash
+        let mut index = self
+            .repo
+            .merge_commits(&head_commit, &target_commit, None)
+            .map_err(|e| e.to_string())?;
+
+        if index.has_conflicts() {
+            return Err("Merge contains conflicts! Resolve in the Conflict Crucible.".to_string());
+        }
+
+        let tree_oid = index.write_tree_to(&self.repo).map_err(|e| e.to_string())?;
+        let tree = self.repo.find_tree(tree_oid).map_err(|e| e.to_string())?;
+        let sig = self
+            .repo
+            .signature()
+            .unwrap_or_else(|_| Signature::now("indoctrinatedrecluse", "recluse@itzamna.dev").unwrap());
+
+        let parents: Vec<&Commit> = match strategy {
+            MergeStrategy::Squash => vec![&head_commit],
+            _ => vec![&head_commit, &target_commit],
+        };
+
+        let msg = format!("Merge branch '{}' into active HEAD", target_branch);
+        let commit_oid = self
+            .repo
+            .commit(Some("HEAD"), &sig, &sig, &msg, &tree, &parents)
+            .map_err(|e| e.to_string())?;
+
+        Ok(format!("Consecrated merge commit [{}]", &commit_oid.to_string()[..7]))
+    }
+
+    /// Cherry-pick a specific commit into active HEAD
+    pub fn cherry_pick_commit(&self, commit_sha: &str) -> Result<String, String> {
+        let commit_oid = Oid::from_str(commit_sha).map_err(|e| e.to_string())?;
+        let target_commit = self.repo.find_commit(commit_oid).map_err(|e| e.to_string())?;
+
+        let head = self.repo.head().map_err(|e| e.to_string())?;
+        let head_commit = head.peel_to_commit().map_err(|e| e.to_string())?;
+
+        let mut index = self
+            .repo
+            .cherrypick_commit(&target_commit, &head_commit, 0, None)
+            .map_err(|e| e.to_string())?;
+
+        if index.has_conflicts() {
+            return Err("Cherry-pick produced conflicts! Open Conflict Crucible.".to_string());
+        }
+
+        let tree_oid = index.write_tree_to(&self.repo).map_err(|e| e.to_string())?;
+        let tree = self.repo.find_tree(tree_oid).map_err(|e| e.to_string())?;
+        let sig = self
+            .repo
+            .signature()
+            .unwrap_or_else(|_| Signature::now("indoctrinatedrecluse", "recluse@itzamna.dev").unwrap());
+
+        let msg = format!("cherry-pick: {}\n\n(cherry picked from commit {})", target_commit.summary().unwrap_or(""), commit_sha);
+        let new_oid = self
+            .repo
+            .commit(Some("HEAD"), &sig, &sig, &msg, &tree, &[&head_commit])
+            .map_err(|e| e.to_string())?;
+
+        Ok(format!("Plucked commit into [{}]", &new_oid.to_string()[..7]))
+    }
+
+    /// 5. The Chac Purifier: Untracked Files and Stash Vault
+    pub fn preview_clean_untracked(&self) -> Vec<String> {
+        let mut opts = StatusOptions::new();
+        opts.include_untracked(true);
+        opts.recurse_untracked_dirs(true);
+
+        let mut untracked = Vec::new();
+        if let Ok(statuses) = self.repo.statuses(Some(&mut opts)) {
+            for entry in statuses.iter() {
+                if entry.status().is_wt_new() {
+                    if let Some(path) = entry.path() {
+                        untracked.push(path.to_string());
+                    }
+                }
+            }
+        }
+        untracked
+    }
+
+    pub fn purge_untracked(&self) -> Result<usize, String> {
+        let files = self.preview_clean_untracked();
+        let mut count = 0;
+        for f in &files {
+            if std::fs::remove_file(f).is_ok() {
+                count += 1;
+            }
+        }
+        Ok(count)
+    }
+
+    pub fn list_detailed_stashes(&mut self) -> Vec<StashEntryDetail> {
+        let mut details = Vec::new();
+        let _ = self.repo.stash_foreach(|idx, name, oid| {
+            details.push(StashEntryDetail {
+                index: idx,
+                message: name.to_string(),
+                commit_sha: oid.to_string()[..7].to_string(),
+            });
+            true
+        });
+        details
+    }
+
+    pub fn drop_stash(&mut self, index: usize) -> Result<(), String> {
+        self.repo.stash_drop(index).map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    /// 6. The Overseer Portals: Remote Operations
+    pub fn get_remote_details(&self) -> Vec<(String, String)> {
+        let mut remotes = Vec::new();
+        if let Ok(list) = self.repo.remotes() {
+            for name in list.iter().flatten() {
+                let url = self
+                    .repo
+                    .find_remote(name)
+                    .ok()
+                    .and_then(|r| r.url().map(|s| s.to_string()))
+                    .unwrap_or_else(|| "local".to_string());
+                remotes.push((name.to_string(), url));
+            }
+        }
+        remotes
     }
 }

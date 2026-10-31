@@ -7,15 +7,27 @@ use iced::{Alignment, Border, Color, Element, Length, Padding};
 use crate::canvas::{DagCanvas, DagMessage};
 use crate::git::{DetailedCommit, GitCommitNode};
 use crate::theme::MayaColors;
+use crate::ui::ahau_blame::{AhauBlameWorkbench, BlameMessage};
+use crate::ui::chac_purifier::{ChacPurifierWorkbench, PurifierMessage};
 use crate::ui::diff_workbench::{DiffMessage, DiffWorkbench};
+use crate::ui::kukulcan_merge::{KukulcanMergeWorkbench, MergeMessage};
 use crate::ui::oracle_radar::{OracleMessage, OracleRadar};
+use crate::ui::overseer_portals::{OverseerPortalsWorkbench, PortalMessage};
+use crate::ui::popol_vuh_log::{PopolLogMessage, PopolVuhLogWorkbench};
 use crate::ui::rebase_crucible::{RebaseCrucible, RebaseMessage};
+use crate::ui::xibalba_reflog::{ReflogMessage, XibalbaReflogWorkbench};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CenterTab {
     YaxcheDag,
     StoneDiff,
+    AhauBlame,
+    PopolVuhLog,
     RebaseCrucible,
+    KukulcanMerge,
+    XibalbaReflog,
+    ChacPurifier,
+    OverseerPortals,
     OracleRadar,
 }
 
@@ -23,7 +35,13 @@ pub enum CenterTab {
 pub enum CenterLoomMessage {
     Dag(DagMessage),
     Diff(DiffMessage),
+    Blame(BlameMessage),
+    PopolLog(PopolLogMessage),
     Rebase(RebaseMessage),
+    Merge(MergeMessage),
+    Reflog(ReflogMessage),
+    Purifier(PurifierMessage),
+    Portal(PortalMessage),
     Oracle(OracleMessage),
     SelectTab(CenterTab),
     ZoomIn,
@@ -36,7 +54,13 @@ pub struct CenterLoom {
     pub active_tab: CenterTab,
     pub dag: DagCanvas,
     pub diff_workbench: DiffWorkbench,
+    pub ahau_blame: AhauBlameWorkbench,
+    pub popol_log: PopolVuhLogWorkbench,
     pub rebase_crucible: RebaseCrucible,
+    pub kukulcan_merge: KukulcanMergeWorkbench,
+    pub xibalba_reflog: XibalbaReflogWorkbench,
+    pub chac_purifier: ChacPurifierWorkbench,
+    pub overseer_portals: OverseerPortalsWorkbench,
     pub oracle_radar: OracleRadar,
     pub selected_commit: Option<GitCommitNode>,
     pub detailed_commit: Option<DetailedCommit>,
@@ -55,7 +79,13 @@ impl CenterLoom {
             active_tab: CenterTab::YaxcheDag,
             dag: DagCanvas::new(commits),
             diff_workbench: DiffWorkbench::default(),
+            ahau_blame: AhauBlameWorkbench::default(),
+            popol_log: PopolVuhLogWorkbench::default(),
             rebase_crucible: RebaseCrucible::new(),
+            kukulcan_merge: KukulcanMergeWorkbench::default(),
+            xibalba_reflog: XibalbaReflogWorkbench::default(),
+            chac_purifier: ChacPurifierWorkbench::default(),
+            overseer_portals: OverseerPortalsWorkbench::default(),
             oracle_radar: OracleRadar::new(),
             selected_commit,
             detailed_commit: None,
@@ -83,16 +113,28 @@ impl CenterLoom {
 
     pub fn view<'a, Message: 'a + From<CenterLoomMessage> + Clone>(&'a self) -> Element<'a, Message> {
         let tab_bar = row![
-            self.tab_button("🌳 YAXCHE COMMIT DAG", CenterTab::YaxcheDag),
-            Space::new().width(4),
-            self.tab_button("🔪 ETZ'NAB' STONE DIFF", CenterTab::StoneDiff),
-            Space::new().width(4),
-            self.tab_button("⚖️ REBASE CRUCIBLE", CenterTab::RebaseCrucible),
-            Space::new().width(4),
-            self.tab_button("🔮 IXCHEL RADAR", CenterTab::OracleRadar),
-            Space::new().width(12),
+            self.tab_button("🌳 DAG", CenterTab::YaxcheDag),
+            Space::new().width(2),
+            self.tab_button("🔪 DIFF", CenterTab::StoneDiff),
+            Space::new().width(2),
+            self.tab_button("👑 BLAME", CenterTab::AhauBlame),
+            Space::new().width(2),
+            self.tab_button("📜 LOG", CenterTab::PopolVuhLog),
+            Space::new().width(2),
+            self.tab_button("⚖️ REBASE", CenterTab::RebaseCrucible),
+            Space::new().width(2),
+            self.tab_button("🌿 MERGE", CenterTab::KukulcanMerge),
+            Space::new().width(2),
+            self.tab_button("🪞 REFLOG", CenterTab::XibalbaReflog),
+            Space::new().width(2),
+            self.tab_button("🌧️ CLEAN", CenterTab::ChacPurifier),
+            Space::new().width(2),
+            self.tab_button("🌐 REMOTES", CenterTab::OverseerPortals),
+            Space::new().width(2),
+            self.tab_button("🔮 RADAR", CenterTab::OracleRadar),
+            Space::new().width(8),
             text(format!("{} Commits", self.dag.commits.len()))
-                .size(10)
+                .size(9)
                 .color(MayaColors::GLYPH_DIM),
             Space::new().width(Length::Fill),
             if self.active_tab == CenterTab::YaxcheDag {
@@ -154,7 +196,7 @@ impl CenterLoom {
                 row![]
             },
         ]
-        .padding(Padding::from([5, 12]))
+        .padding(Padding::from([4, 8]))
         .align_y(Alignment::Center);
 
         let main_content: Element<'a, Message> = match self.active_tab {
@@ -173,10 +215,40 @@ impl CenterLoom {
                     .view()
                     .map(|msg| CenterLoomMessage::Diff(msg).into())
             }
+            CenterTab::AhauBlame => {
+                self.ahau_blame
+                    .view()
+                    .map(|msg| CenterLoomMessage::Blame(msg).into())
+            }
+            CenterTab::PopolVuhLog => {
+                self.popol_log
+                    .view()
+                    .map(|msg| CenterLoomMessage::PopolLog(msg).into())
+            }
             CenterTab::RebaseCrucible => {
                 self.rebase_crucible
                     .view()
                     .map(|msg| CenterLoomMessage::Rebase(msg).into())
+            }
+            CenterTab::KukulcanMerge => {
+                self.kukulcan_merge
+                    .view()
+                    .map(|msg| CenterLoomMessage::Merge(msg).into())
+            }
+            CenterTab::XibalbaReflog => {
+                self.xibalba_reflog
+                    .view()
+                    .map(|msg| CenterLoomMessage::Reflog(msg).into())
+            }
+            CenterTab::ChacPurifier => {
+                self.chac_purifier
+                    .view()
+                    .map(|msg| CenterLoomMessage::Purifier(msg).into())
+            }
+            CenterTab::OverseerPortals => {
+                self.overseer_portals
+                    .view()
+                    .map(|msg| CenterLoomMessage::Portal(msg).into())
             }
             CenterTab::OracleRadar => {
                 self.oracle_radar
@@ -304,7 +376,13 @@ impl CenterLoom {
         let tooltip_desc = match tab {
             CenterTab::YaxcheDag => "Visual commit DAG graph with branch lanes & merge ribbons (git log --graph --all)",
             CenterTab::StoneDiff => "Interactive intraline diff viewer with hunk-level staging (git diff)",
+            CenterTab::AhauBlame => "The Ahau Lineage: Line-by-line file blame and age heatmap (git blame)",
+            CenterTab::PopolVuhLog => "The Popol Vuh Chronicle: Advanced search & commit history (git log --grep)",
             CenterTab::RebaseCrucible => "Interactive timeline rebase sequencer & 3-way conflict resolver (git rebase -i / git merge)",
+            CenterTab::KukulcanMerge => "The K'uk'ulkan Confluence: Branch merge & cherry-pick altar (git merge / cherry-pick)",
+            CenterTab::XibalbaReflog => "The Xibalba Mirror: Visual reflog timeline & reset dials (git reflog / reset)",
+            CenterTab::ChacPurifier => "The Chac Purifier: Untracked file cleaner & multi-stash vault (git clean / stash)",
+            CenterTab::OverseerPortals => "The Overseer Portals: Remote sync, force-with-lease push & prune (git push / fetch)",
             CenterTab::OracleRadar => "Repository health radar: DORA velocity metrics, lead time, and team analytics",
         };
 

@@ -4,4 +4,7 @@ pub mod repository;
 
 pub use detailed_commit::{CommitFileChange, DetailedCommit};
 pub use diff::{DiffEngine, DiffHunk, DiffLine, DiffLineTag, FileDiff};
-pub use repository::{FileStatus, GitCommitNode, GitSanctuary};
+pub use repository::{
+    BlameLineInfo, FileStatus, GitCommitNode, GitSanctuary, MergeStrategy, ReflogEntryInfo,
+    StashEntryDetail,
+};
