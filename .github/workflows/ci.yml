@@ -2,9 +2,8 @@ name: CI — The Sacred Tests of Itzamna & Ixchel
 
 on:
   push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+    tags:
+      - 'v*'
 
 jobs:
   test-desktop:
