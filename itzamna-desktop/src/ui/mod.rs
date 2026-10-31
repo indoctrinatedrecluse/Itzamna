@@ -1,5 +1,6 @@
 pub mod bottom_prophecy;
 pub mod center_loom;
+pub mod diff_workbench;
 pub mod glyph_ribbon;
 pub mod left_codex;
 pub mod right_altar;
@@ -7,7 +8,8 @@ pub mod status_bar;
 pub mod top_menu;
 
 pub use bottom_prophecy::{BottomProphecy, ProphecyLevel, ProphecyMessage};
-pub use center_loom::{CenterLoom, CenterLoomMessage};
+pub use center_loom::{CenterLoom, CenterLoomMessage, CenterTab};
+pub use diff_workbench::{DiffMessage, DiffWorkbench};
 pub use glyph_ribbon::GlyphRibbon;
 pub use left_codex::{LeftCodex, LeftCodexMessage};
 pub use right_altar::{FileEntry, RightAltar, RightAltarMessage};

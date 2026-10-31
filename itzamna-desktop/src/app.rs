@@ -1,16 +1,16 @@
-//! ItzamnaApp — Supreme Mayan Application Orchestrator (Phase 3: The Tree of Life)
+//! ItzamnaApp — Supreme Mayan Application Orchestrator (Phase 4: The Altar of Creation)
 
-use iced::widget::{column, container, image, row, stack, text, Space};
-use iced::{Alignment, ContentFit, Element, Length, Subscription, Task};
+use iced::widget::{column, container, image, row, stack, Space};
+use iced::{ContentFit, Element, Length, Subscription, Task};
 use std::time::Duration;
 
 use crate::canvas::{BackgroundMode, CosmicLoom};
 use crate::git::{FileStatus, GitSanctuary};
 use crate::theme::MayaColors;
 use crate::ui::{
-    BottomProphecy, CenterLoom, CenterLoomMessage, FileEntry, GlyphRibbon, LeftCodex,
-    LeftCodexMessage, MenuCategory, ProphecyLevel, ProphecyMessage, RightAltar, RightAltarMessage,
-    StatusBar, TopMenuBar, TopMenuMessage,
+    BottomProphecy, CenterLoom, CenterLoomMessage, CenterTab, DiffMessage, FileEntry, GlyphRibbon,
+    LeftCodex, LeftCodexMessage, MenuCategory, ProphecyLevel, ProphecyMessage, RightAltar,
+    RightAltarMessage, StatusBar, TopMenuBar, TopMenuMessage,
 };
 
 #[derive(Debug, Clone)]
@@ -33,9 +33,9 @@ pub struct ItzamnaApp {
     bottom_prophecy: BottomProphecy,
     status_bar: StatusBar,
     background_mode: BackgroundMode,
-    static_bg_handle: Option<image::Handle>,
+    static_bg_handle: image::Handle,
+    video_frames: Vec<image::Handle>,
     video_frame_index: usize,
-    total_video_frames: usize,
 }
 
 impl Default for ItzamnaApp {
@@ -46,26 +46,30 @@ impl Default for ItzamnaApp {
 
 impl ItzamnaApp {
     pub fn new() -> Self {
-        // 1. Resolve background image (supports background.jpg or background.png)
-        let static_bg_path = [
-            "itzamna-desktop/assets/background.jpg",
-            "assets/background.jpg",
-            "itzamna-desktop/assets/background.png",
-            "assets/background.png",
-        ]
-        .into_iter()
-        .find(|p| std::path::Path::new(p).exists());
+        // 1. Guaranteed static background:
+        // Always embedded from assets/background.jpg so it NEVER fails on any PC or CWD!
+        let embedded_bytes = include_bytes!("../assets/background.jpg");
+        let static_bg_handle = image::Handle::from_bytes(&embedded_bytes[..]);
 
-        let static_bg_handle = static_bg_path.map(image::Handle::from_path);
+        // 2. Pre-load video frames into RAM for instantaneous zero-flicker playback
+        let mut video_frames = Vec::new();
+        let frame_dirs = [
+            "itzamna-desktop/assets/video_frames",
+            "assets/video_frames",
+        ];
 
-        // 2. Count available video loop frames
-        let mut total_video_frames = 0;
-        for i in 0..300 {
-            let path = format!("itzamna-desktop/assets/video_frames/frame_{:03}.jpg", i);
-            if std::path::Path::new(&path).exists() {
-                total_video_frames += 1;
-            } else {
-                break;
+        let resolved_frame_dir = frame_dirs
+            .iter()
+            .find(|dir| std::path::Path::new(dir).exists());
+
+        if let Some(dir) = resolved_frame_dir {
+            for i in 0..240 {
+                let frame_path = format!("{}/frame_{:03}.jpg", dir, i);
+                if std::path::Path::new(&frame_path).exists() {
+                    video_frames.push(image::Handle::from_path(frame_path));
+                } else {
+                    break;
+                }
             }
         }
 
@@ -111,9 +115,9 @@ impl ItzamnaApp {
                 .collect();
 
             bottom_prophecy.push(
-                "23:06:00",
+                "23:18:00",
                 "🌳",
-                format!("Awakened real Git repository: {} commits, {} unstaged files", commits.len(), right_altar.unstaged_files.len()),
+                format!("Awakened real Git repository: {} commits, {} video frames preloaded", commits.len(), video_frames.len()),
                 ProphecyLevel::Solar,
             );
 
@@ -131,8 +135,8 @@ impl ItzamnaApp {
             status_bar,
             background_mode: BackgroundMode::ProceduralLoom,
             static_bg_handle,
+            video_frames,
             video_frame_index: 0,
-            total_video_frames,
         }
     }
 
@@ -142,7 +146,7 @@ impl ItzamnaApp {
                 iced::time::every(Duration::from_millis(16)).map(|_| Message::Tick)
             }
             BackgroundMode::VideoLoop => {
-                // 24 FPS video playback loop
+                // Smooth 24 FPS video loop playback
                 iced::time::every(Duration::from_millis(41)).map(|_| Message::Tick)
             }
             BackgroundMode::StaticArtwork | BackgroundMode::StealthObsidian => {
@@ -158,8 +162,8 @@ impl ItzamnaApp {
                 match self.background_mode {
                     BackgroundMode::ProceduralLoom => self.loom.tick(dt),
                     BackgroundMode::VideoLoop => {
-                        if self.total_video_frames > 0 {
-                            self.video_frame_index = (self.video_frame_index + 1) % self.total_video_frames;
+                        if !self.video_frames.is_empty() {
+                            self.video_frame_index = (self.video_frame_index + 1) % self.video_frames.len();
                         }
                     }
                     _ => {}
@@ -183,7 +187,7 @@ impl ItzamnaApp {
                             MenuCategory::SacredAltar => "Sacred Altar: Stash & Staging Cist (Altar Menu)",
                             MenuCategory::IxchelOracle => "Ixchel Oracle: Divination Engine (Oracle Menu)",
                         };
-                        self.bottom_prophecy.push("23:06:00", "📜", desc.into(), ProphecyLevel::Solar);
+                        self.bottom_prophecy.push("23:18:00", "📜", desc.into(), ProphecyLevel::Solar);
                     }
                     Task::none()
                 }
@@ -195,19 +199,19 @@ impl ItzamnaApp {
                     self.background_mode = self.background_mode.next();
                     self.top_menu.background_mode = self.background_mode;
                     let msg = format!("Loom Mode Shifted: {}", self.background_mode.description());
-                    self.bottom_prophecy.push("23:06:00", "✨", msg, ProphecyLevel::Jade);
+                    self.bottom_prophecy.push("23:18:00", "✨", msg, ProphecyLevel::Jade);
                     Task::none()
                 }
                 TopMenuMessage::OpenCodex => {
-                    self.bottom_prophecy.push("23:06:00", "📂", "Invoked Open Codex Dialog".into(), ProphecyLevel::Maya);
+                    self.bottom_prophecy.push("23:18:00", "📂", "Invoked Open Codex Dialog".into(), ProphecyLevel::Maya);
                     Task::none()
                 }
                 TopMenuMessage::NewInscription => {
-                    self.bottom_prophecy.push("23:06:00", "🏛️", "Founding New Git Sanctuary in current path".into(), ProphecyLevel::Jade);
+                    self.bottom_prophecy.push("23:18:00", "🏛️", "Founding New Git Sanctuary in current path".into(), ProphecyLevel::Jade);
                     Task::none()
                 }
                 TopMenuMessage::FetchPulse => {
-                    self.bottom_prophecy.push("23:06:00", "⚡", "Sent Solar Pulse to Remote Horizon (git fetch origin)".into(), ProphecyLevel::Solar);
+                    self.bottom_prophecy.push("23:18:00", "⚡", "Sent Solar Pulse to Remote Horizon (git fetch origin)".into(), ProphecyLevel::Solar);
                     Task::none()
                 }
             },
@@ -219,27 +223,27 @@ impl ItzamnaApp {
                 LeftCodexMessage::SelectBranch(b) => {
                     self.left_codex.active_branch = b.clone();
                     self.status_bar.active_branch = b.clone();
-                    self.bottom_prophecy.push("23:06:00", "🌿", format!("Switched sovereign branch to '{}'", b), ProphecyLevel::Jade);
+                    self.bottom_prophecy.push("23:18:00", "🌿", format!("Switched sovereign branch to '{}'", b), ProphecyLevel::Jade);
                     Task::none()
                 }
                 LeftCodexMessage::SelectTag(t) => {
-                    self.bottom_prophecy.push("23:06:00", "🏷️", format!("Inspecting solar tag: {}", t), ProphecyLevel::Solar);
+                    self.bottom_prophecy.push("23:18:00", "🏷️", format!("Inspecting solar tag: {}", t), ProphecyLevel::Solar);
                     Task::none()
                 }
                 LeftCodexMessage::SelectStash(idx) => {
-                    self.bottom_prophecy.push("23:06:00", "🏺", format!("Inspecting sacred stash cist: {}", idx), ProphecyLevel::Maya);
+                    self.bottom_prophecy.push("23:18:00", "🏺", format!("Inspecting sacred stash cist: {}", idx), ProphecyLevel::Maya);
                     Task::none()
                 }
                 LeftCodexMessage::SproutBranch => {
-                    self.bottom_prophecy.push("23:06:00", "🌱", "Sprouting new branch from HEAD...".into(), ProphecyLevel::Jade);
+                    self.bottom_prophecy.push("23:18:00", "🌱", "Sprouting new branch from HEAD...".into(), ProphecyLevel::Jade);
                     Task::none()
                 }
                 LeftCodexMessage::FetchRemote => {
-                    self.bottom_prophecy.push("23:06:00", "🌐", "Synchronizing remote horizon...".into(), ProphecyLevel::Maya);
+                    self.bottom_prophecy.push("23:18:00", "🌐", "Synchronizing remote horizon...".into(), ProphecyLevel::Maya);
                     Task::none()
                 }
                 LeftCodexMessage::CreateStash => {
-                    self.bottom_prophecy.push("23:06:00", "🔒", "Sheltering altered working tree into sacred cist".into(), ProphecyLevel::Maya);
+                    self.bottom_prophecy.push("23:18:00", "🔒", "Sheltering altered working tree into sacred cist".into(), ProphecyLevel::Maya);
                     Task::none()
                 }
             },
@@ -248,10 +252,42 @@ impl ItzamnaApp {
                     crate::canvas::DagMessage::CommitSelected(sha) => {
                         self.center_loom.select_sha(&sha);
                         self.status_bar.head_sha = sha.clone();
-                        self.bottom_prophecy.push("23:06:00", "☀️", format!("Focused commit kin signet: {}", sha), ProphecyLevel::Solar);
+                        self.bottom_prophecy.push("23:18:00", "☀️", format!("Focused commit kin signet: {}", sha), ProphecyLevel::Solar);
                         Task::none()
                     }
                 },
+                CenterLoomMessage::Diff(diff_msg) => match diff_msg {
+                    DiffMessage::StageHunk(idx) => {
+                        self.bottom_prophecy.push("23:18:00", "🔪", format!("Etz'nab' surgical stage: Hunk #{} consecrated to Altar", idx + 1), ProphecyLevel::Jade);
+                        Task::none()
+                    }
+                    DiffMessage::UnstageHunk(idx) => {
+                        self.bottom_prophecy.push("23:18:00", "↩️", format!("Withdrew Hunk #{} from Altar", idx + 1), ProphecyLevel::Maya);
+                        Task::none()
+                    }
+                    DiffMessage::DiscardHunk(idx) => {
+                        self.bottom_prophecy.push("23:18:00", "⚠️", format!("Purified and discarded Hunk #{}", idx + 1), ProphecyLevel::Xibalba);
+                        Task::none()
+                    }
+                    DiffMessage::StageEntireFile => {
+                        let path = self.center_loom.diff_workbench.file_path.clone();
+                        if let Some(pos) = self.right_altar.unstaged_files.iter().position(|f| f.path == path) {
+                            let item = self.right_altar.unstaged_files.remove(pos);
+                            self.right_altar.staged_files.push(item);
+                        }
+                        self.bottom_prophecy.push("23:18:00", "✨", format!("Entire file consecrated: {}", path), ProphecyLevel::Jade);
+                        self.status_bar.is_pristine = self.right_altar.unstaged_files.is_empty();
+                        Task::none()
+                    }
+                    DiffMessage::CloseDiff => {
+                        self.center_loom.active_tab = CenterTab::YaxcheDag;
+                        Task::none()
+                    }
+                },
+                CenterLoomMessage::SelectTab(tab) => {
+                    self.center_loom.active_tab = tab;
+                    Task::none()
+                }
                 CenterLoomMessage::ZoomIn => {
                     self.center_loom.dag.zoom_in();
                     Task::none()
@@ -274,8 +310,10 @@ impl ItzamnaApp {
                     if let Some(pos) = self.right_altar.unstaged_files.iter().position(|f| f.path == path) {
                         let item = self.right_altar.unstaged_files.remove(pos);
                         self.right_altar.staged_files.push(item);
-                        self.bottom_prophecy.push("23:06:00", "✨", format!("Offered file to altar: {}", path), ProphecyLevel::Jade);
+                        self.bottom_prophecy.push("23:18:00", "✨", format!("Offered file to altar: {}", path), ProphecyLevel::Jade);
                     }
+                    // Automatically open in diff workbench
+                    self.center_loom.open_file_diff(path);
                     self.status_bar.is_pristine = self.right_altar.unstaged_files.is_empty();
                     Task::none()
                 }
@@ -283,7 +321,7 @@ impl ItzamnaApp {
                     if let Some(pos) = self.right_altar.staged_files.iter().position(|f| f.path == path) {
                         let item = self.right_altar.staged_files.remove(pos);
                         self.right_altar.unstaged_files.push(item);
-                        self.bottom_prophecy.push("23:06:00", "↩️", format!("Withdrew file from altar: {}", path), ProphecyLevel::Maya);
+                        self.bottom_prophecy.push("23:18:00", "↩️", format!("Withdrew file from altar: {}", path), ProphecyLevel::Maya);
                     }
                     self.status_bar.is_pristine = self.right_altar.unstaged_files.is_empty();
                     Task::none()
@@ -291,19 +329,19 @@ impl ItzamnaApp {
                 RightAltarMessage::StageAll => {
                     let mut all = std::mem::take(&mut self.right_altar.unstaged_files);
                     self.right_altar.staged_files.append(&mut all);
-                    self.bottom_prophecy.push("23:06:00", "✨", "All offerings consecrated to the Altar".into(), ProphecyLevel::Jade);
+                    self.bottom_prophecy.push("23:18:00", "✨", "All offerings consecrated to the Altar".into(), ProphecyLevel::Jade);
                     self.status_bar.is_pristine = true;
                     Task::none()
                 }
                 RightAltarMessage::UnstageAll => {
                     let mut all = std::mem::take(&mut self.right_altar.staged_files);
                     self.right_altar.unstaged_files.append(&mut all);
-                    self.bottom_prophecy.push("23:06:00", "↩️", "All offerings returned to working tree".into(), ProphecyLevel::Maya);
+                    self.bottom_prophecy.push("23:18:00", "↩️", "All offerings returned to working tree".into(), ProphecyLevel::Maya);
                     self.status_bar.is_pristine = self.right_altar.unstaged_files.is_empty();
                     Task::none()
                 }
                 RightAltarMessage::DiscardAll => {
-                    self.bottom_prophecy.push("23:06:00", "⚠️", "Purification ceremony performed (changes discarded)".into(), ProphecyLevel::Xibalba);
+                    self.bottom_prophecy.push("23:18:00", "⚠️", "Purification ceremony performed (changes discarded)".into(), ProphecyLevel::Xibalba);
                     Task::none()
                 }
                 RightAltarMessage::CommitSummaryChanged(s) => {
@@ -312,7 +350,7 @@ impl ItzamnaApp {
                 }
                 RightAltarMessage::InscribeCommit => {
                     let msg = self.right_altar.commit_summary.clone();
-                    self.bottom_prophecy.push("23:06:00", "🔥", format!("Sealed in stone: '{}'", msg), ProphecyLevel::Solar);
+                    self.bottom_prophecy.push("23:18:00", "🔥", format!("Sealed in stone: '{}'", msg), ProphecyLevel::Solar);
                     self.right_altar.staged_files.clear();
                     Task::none()
                 }
@@ -335,29 +373,15 @@ impl ItzamnaApp {
         let background_layer: Element<'_, Message> = match self.background_mode {
             BackgroundMode::ProceduralLoom => self.loom.view(1920.0, 1080.0),
             BackgroundMode::StaticArtwork => {
-                if let Some(handle) = &self.static_bg_handle {
-                    image(handle.clone())
-                        .width(Length::Fill)
-                        .height(Length::Fill)
-                        .content_fit(ContentFit::Cover)
-                        .into()
-                } else {
-                    container(
-                        text("🖼️ Place background.jpg in assets/ directory")
-                            .size(13)
-                            .color(MayaColors::GLYPH_DIM),
-                    )
+                image(self.static_bg_handle.clone())
                     .width(Length::Fill)
                     .height(Length::Fill)
-                    .align_x(Alignment::Center)
-                    .align_y(Alignment::Center)
+                    .content_fit(ContentFit::Cover)
                     .into()
-                }
             }
             BackgroundMode::VideoLoop => {
-                if self.total_video_frames > 0 {
-                    let frame_path = format!("itzamna-desktop/assets/video_frames/frame_{:03}.jpg", self.video_frame_index);
-                    image(image::Handle::from_path(frame_path))
+                if !self.video_frames.is_empty() {
+                    image(self.video_frames[self.video_frame_index].clone())
                         .width(Length::Fill)
                         .height(Length::Fill)
                         .content_fit(ContentFit::Cover)
