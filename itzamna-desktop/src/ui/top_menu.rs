@@ -1,9 +1,11 @@
 //! The Council of Ahau (Top Menu Bar)
-//! Mayan-themed navigation hierarchy framing the application window.
+//! Mayan-themed navigation hierarchy framing the application window with
+//! dynamic background mode switcher.
 
 use iced::widget::{button, container, row, text, Space};
 use iced::{Alignment, Border, Color, Element, Length, Padding};
 
+use crate::canvas::BackgroundMode;
 use crate::theme::MayaColors;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -20,7 +22,7 @@ pub enum MenuCategory {
 pub enum TopMenuMessage {
     SelectMenu(MenuCategory),
     CloseMenu,
-    ToggleCosmicLoom,
+    CycleBackgroundMode,
     OpenCodex,
     NewInscription,
     FetchPulse,
@@ -28,7 +30,7 @@ pub enum TopMenuMessage {
 
 pub struct TopMenuBar {
     pub active_menu: Option<MenuCategory>,
-    pub cosmic_loom_active: bool,
+    pub background_mode: BackgroundMode,
 }
 
 impl Default for TopMenuBar {
@@ -41,7 +43,7 @@ impl TopMenuBar {
     pub fn new() -> Self {
         Self {
             active_menu: None,
-            cosmic_loom_active: true,
+            background_mode: BackgroundMode::ProceduralLoom,
         }
     }
 
@@ -67,26 +69,23 @@ impl TopMenuBar {
         .spacing(4)
         .align_y(Alignment::Center);
 
-        let loom_label = if self.cosmic_loom_active {
-            "✨ Loom: Active"
-        } else {
-            "🌑 Loom: Paused"
+        let loom_color = match self.background_mode {
+            BackgroundMode::ProceduralLoom => MayaColors::JADE_GLOW,
+            BackgroundMode::StaticArtwork => MayaColors::SOLAR_GOLD,
+            BackgroundMode::VideoLoop => MayaColors::MAYA_BLUE,
+            BackgroundMode::StealthObsidian => MayaColors::PARCHMENT_MUTED,
         };
 
         let quick_actions = row![
             button(
-                text(loom_label)
+                text(self.background_mode.label())
                     .size(11)
-                    .color(if self.cosmic_loom_active {
-                        MayaColors::JADE_GLOW
-                    } else {
-                        MayaColors::PARCHMENT_MUTED
-                    })
+                    .color(loom_color)
             )
             .padding(Padding::from([4, 10]))
-            .style(|_theme, status| {
+            .style(move |_theme, status| {
                 let border_color = match status {
-                    button::Status::Hovered => MayaColors::JADE_GLOW,
+                    button::Status::Hovered => loom_color,
                     _ => MayaColors::OBSIDIAN_BORDER,
                 };
                 button::Style {
@@ -100,7 +99,7 @@ impl TopMenuBar {
                     ..Default::default()
                 }
             })
-            .on_press(TopMenuMessage::ToggleCosmicLoom.into()),
+            .on_press(TopMenuMessage::CycleBackgroundMode.into()),
 
             button(
                 text("⚡ Fetch Pulse")
