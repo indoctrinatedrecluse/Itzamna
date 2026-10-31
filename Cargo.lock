@@ -1966,6 +1966,7 @@ dependencies = [
  "chrono",
  "git2",
  "iced",
+ "image",
  "notify",
  "redb",
  "serde",

@@ -1,8 +1,10 @@
-//! ItzamnaApp — Supreme Mayan Application Orchestrator (Phase 5: Full Real Execution)
+//! ItzamnaApp — Supreme Mayan Application Orchestrator
+//! GPU-Accelerated Git Studio with Pre-Buffered RGBA Video & Splash Screen
 
-use iced::widget::{column, container, image, row, stack, Space};
-use iced::{ContentFit, Element, Length, Subscription, Task};
+use iced::widget::{button, column, container, image, row, stack, text, Space};
+use iced::{Alignment, Border, Color, ContentFit, Element, Length, Padding, Subscription, Task};
 use std::time::Duration;
+use ::image as img_crate;
 
 use crate::canvas::{BackgroundMode, CosmicLoom};
 use crate::git::{FileStatus, GitSanctuary};
@@ -13,9 +15,16 @@ use crate::ui::{
     RebaseMessage, RightAltar, RightAltarMessage, StatusBar, TopMenuBar, TopMenuMessage,
 };
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AppStage {
+    Splash,
+    Studio,
+}
+
 #[derive(Debug, Clone)]
 pub enum Message {
     Tick,
+    EnterStudio,
     TopMenu(TopMenuMessage),
     LeftCodex(LeftCodexMessage),
     CenterLoom(CenterLoomMessage),
@@ -24,6 +33,10 @@ pub enum Message {
 }
 
 pub struct ItzamnaApp {
+    stage: AppStage,
+    splash_progress: f32,
+    splash_status: &'static str,
+    splash_timer: f32,
     loom: CosmicLoom,
     glyph_ribbon: GlyphRibbon,
     top_menu: TopMenuBar,
@@ -47,31 +60,66 @@ impl Default for ItzamnaApp {
 
 impl ItzamnaApp {
     pub fn new() -> Self {
-        // 1. Static background: Embedded in binary for guaranteed 100% availability
+        // 1. Static background: Pre-decode embedded JPEG into raw RGBA handle (0ms draw lag)
         let embedded_bytes = include_bytes!("../assets/background.jpg");
-        let static_bg_handle = image::Handle::from_bytes(&embedded_bytes[..]);
+        let static_bg_handle = if let Ok(img) = img_crate::load_from_memory(embedded_bytes) {
+            let rgba = img.to_rgba8();
+            let (w, h) = rgba.dimensions();
+            image::Handle::from_rgba(w, h, rgba.into_raw())
+        } else {
+            image::Handle::from_bytes(&embedded_bytes[..])
+        };
 
-        // 2. Pre-load video frames directly into in-memory handles (bypassing async disk decodes)
+        // 2. High-Efficiency Video Frames: Pre-decode into raw RGBA from unified video_loop.bin
         let mut video_frames = Vec::new();
-        let frame_search_dirs = [
-            "itzamna-desktop/assets/video_frames",
-            "assets/video_frames",
-            "D:/Projects/Itzamna/itzamna-desktop/assets/video_frames",
-            "D:/Projects/Itzamna/assets/video_frames",
+        let bin_paths = [
+            "itzamna-desktop/assets/video_loop.bin",
+            "assets/video_loop.bin",
+            "D:/Projects/Itzamna/itzamna-desktop/assets/video_loop.bin",
+            "D:/Projects/Itzamna/assets/video_loop.bin",
         ];
 
-        let resolved_dir = frame_search_dirs
-            .iter()
-            .find(|dir| std::path::Path::new(dir).exists());
+        if let Some(bin_path) = bin_paths.iter().find(|p| std::path::Path::new(p).exists()) {
+            if let Ok(bytes) = std::fs::read(bin_path) {
+                if bytes.len() > 8 && &bytes[0..4] == b"ITZM" {
+                    let total_frames = u32::from_le_bytes(bytes[4..8].try_into().unwrap_or_default()) as usize;
+                    let mut offset = 8;
+                    for _ in 0..total_frames {
+                        if offset + 4 > bytes.len() { break; }
+                        let frame_len = u32::from_le_bytes(bytes[offset..offset+4].try_into().unwrap_or_default()) as usize;
+                        offset += 4;
+                        if offset + frame_len > bytes.len() { break; }
+                        let frame_bytes = &bytes[offset..offset+frame_len];
+                        offset += frame_len;
+                        if let Ok(img) = img_crate::load_from_memory(frame_bytes) {
+                            let rgba = img.to_rgba8();
+                            let (w, h) = rgba.dimensions();
+                            video_frames.push(image::Handle::from_rgba(w, h, rgba.into_raw()));
+                        }
+                    }
+                }
+            }
+        }
 
-        if let Some(dir) = resolved_dir {
-            // Pre-load 120 frames in memory for smooth, zero-latency looping
-            for i in 0..120 {
-                let frame_path = format!("{}/frame_{:03}.jpg", dir, i);
-                if let Ok(bytes) = std::fs::read(&frame_path) {
-                    video_frames.push(image::Handle::from_bytes(bytes));
-                } else {
-                    break;
+        // Fallback: search individual video frame files if binary container absent
+        if video_frames.is_empty() {
+            let frame_search_dirs = [
+                "itzamna-desktop/assets/video_frames",
+                "assets/video_frames",
+                "D:/Projects/Itzamna/itzamna-desktop/assets/video_frames",
+                "D:/Projects/Itzamna/assets/video_frames",
+            ];
+
+            if let Some(dir) = frame_search_dirs.iter().find(|dir| std::path::Path::new(dir).exists()) {
+                for i in (0..120).step_by(3) {
+                    let frame_path = format!("{}/frame_{:03}.jpg", dir, i);
+                    if let Ok(bytes) = std::fs::read(&frame_path) {
+                        if let Ok(img) = img_crate::load_from_memory(&bytes) {
+                            let rgba = img.to_rgba8();
+                            let (w, h) = rgba.dimensions();
+                            video_frames.push(image::Handle::from_rgba(w, h, rgba.into_raw()));
+                        }
+                    }
                 }
             }
         }
@@ -124,7 +172,7 @@ impl ItzamnaApp {
             bottom_prophecy.push(
                 "23:55:00",
                 "🌳",
-                format!("Awakened real Git sanctuary: {} commits, {} video frames loaded", commits.len(), video_frames.len()),
+                format!("Awakened real Git sanctuary: {} commits, {} video frames pre-buffered", commits.len(), video_frames.len()),
                 ProphecyLevel::Solar,
             );
 
@@ -135,6 +183,10 @@ impl ItzamnaApp {
         }
 
         Self {
+            stage: AppStage::Splash,
+            splash_progress: 0.0,
+            splash_status: "☀️ Aligning the Tzolk'in Solar Calendar...",
+            splash_timer: 0.0,
             loom: CosmicLoom::new(),
             glyph_ribbon: GlyphRibbon::new(),
             top_menu: TopMenuBar::new(),
@@ -143,7 +195,7 @@ impl ItzamnaApp {
             right_altar,
             bottom_prophecy,
             status_bar,
-            background_mode: BackgroundMode::ProceduralLoom,
+            background_mode: BackgroundMode::VideoLoop,
             static_bg_handle,
             video_frames,
             video_frame_index: 0,
@@ -191,6 +243,10 @@ impl ItzamnaApp {
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
+        if self.stage == AppStage::Splash {
+            return iced::time::every(Duration::from_millis(16)).map(|_| Message::Tick);
+        }
+
         match self.background_mode {
             BackgroundMode::ProceduralLoom => {
                 iced::time::every(Duration::from_millis(16)).map(|_| Message::Tick)
@@ -207,8 +263,40 @@ impl ItzamnaApp {
 
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
+            Message::EnterStudio => {
+                self.stage = AppStage::Studio;
+                Task::none()
+            }
             Message::Tick => {
                 let dt = 0.016;
+
+                if self.stage == AppStage::Splash {
+                    self.splash_timer += dt;
+                    self.splash_progress = (self.splash_timer / 2.2).min(1.0);
+
+                    if self.splash_progress < 0.25 {
+                        self.splash_status = "☀️ Aligning the Tzolk'in Solar Calendar...";
+                    } else if self.splash_progress < 0.50 {
+                        self.splash_status = "✨ Pre-buffering RGBA Celestial Video Textures...";
+                    } else if self.splash_progress < 0.75 {
+                        self.splash_status = "📜 Unrolling the Sacred Popol Vuh Repository...";
+                    } else if self.splash_progress < 0.99 {
+                        self.splash_status = "🌳 Awakening the Yaxche Tree of Life...";
+                    } else {
+                        self.splash_status = "🔥 The Temple Portal is Open · Entering Sovereign Studio";
+                    }
+
+                    if self.splash_timer >= 2.6 {
+                        self.stage = AppStage::Studio;
+                    }
+
+                    if !self.video_frames.is_empty() {
+                        self.video_frame_index = (self.video_frame_index + 1) % self.video_frames.len();
+                    }
+
+                    return Task::none();
+                }
+
                 match self.background_mode {
                     BackgroundMode::ProceduralLoom => self.loom.tick(dt),
                     BackgroundMode::VideoLoop => {
@@ -600,6 +688,10 @@ impl ItzamnaApp {
     }
 
     pub fn view(&self) -> Element<'_, Message> {
+        if self.stage == AppStage::Splash {
+            return self.view_splash();
+        }
+
         // 1. Layer 0: The Dynamic Background
         let background_layer: Element<'_, Message> = match self.background_mode {
             BackgroundMode::ProceduralLoom => self.loom.view(1920.0, 1080.0),
@@ -663,6 +755,152 @@ impl ItzamnaApp {
         stack![
             background_layer,
             foreground,
+        ]
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
+    }
+
+    fn view_splash(&self) -> Element<'_, Message> {
+        let bg: Element<'_, Message> = if !self.video_frames.is_empty() {
+            image(self.video_frames[self.video_frame_index].clone())
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .content_fit(ContentFit::Cover)
+                .into()
+        } else {
+            self.loom.view(1920.0, 1080.0)
+        };
+
+        let vignette = container(Space::new())
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .style(|_theme| container::Style {
+                background: Some(Color { a: 0.65, ..MayaColors::OBSIDIAN_VOID }.into()),
+                ..Default::default()
+            });
+
+        let title_row = row![
+            text("🔱 ITZAMNÁ").size(24).color(MayaColors::SOLAR_GOLD),
+            text(" · ").size(24).color(MayaColors::GLYPH_DIM),
+            text("GIT STUDIO").size(24).color(MayaColors::JADE_GLOW),
+        ]
+        .align_y(Alignment::Center);
+
+        let subtitle = text("Maximalist GPU-Accelerated Architecture · Mesoamerican Cosmological Engine")
+            .size(11)
+            .color(MayaColors::PARCHMENT_MUTED);
+
+        let glyph_divider = text("· ☀️ · 🌿 · ⚖️ · 🔮 · 🩸 · 🏛️ · ⚡ ·")
+            .size(12)
+            .color(MayaColors::GLYPH_DIM);
+
+        let bar_width = 460.0;
+        let fill_width = (bar_width * self.splash_progress).max(4.0);
+
+        let progress_fill = container(Space::new())
+            .width(fill_width)
+            .height(10)
+            .style(|_theme| container::Style {
+                background: Some(MayaColors::SOLAR_GOLD.into()),
+                border: Border {
+                    radius: 4.0.into(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            });
+
+        let progress_bar = container(progress_fill)
+            .width(bar_width)
+            .height(14)
+            .padding(Padding::from(2))
+            .style(|_theme| container::Style {
+                background: Some(MayaColors::OBSIDIAN_BASE.into()),
+                border: Border {
+                    color: MayaColors::JADE_GLOW,
+                    width: 1.0,
+                    radius: 6.0.into(),
+                },
+                ..Default::default()
+            });
+
+        let percentage = text(format!("{:.0}%", self.splash_progress * 100.0))
+            .size(11)
+            .color(MayaColors::SOLAR_AMBER);
+
+        let status_label = text(self.splash_status)
+            .size(11)
+            .color(MayaColors::STARLIGHT_WHITE);
+
+        let enter_button = button(
+            row![
+                text("☀️ ENTER SANCTUARY").size(12).color(MayaColors::OBSIDIAN_VOID),
+                text(" (CLICK TO SKIP)").size(9).color(Color { a: 0.7, ..MayaColors::OBSIDIAN_VOID }),
+            ]
+            .align_y(Alignment::Center)
+        )
+        .padding(Padding::from([8, 20]))
+        .style(|_theme, status| {
+            let bg = match status {
+                button::Status::Hovered => MayaColors::SOLAR_AMBER,
+                _ => MayaColors::SOLAR_GOLD,
+            };
+            button::Style {
+                background: Some(bg.into()),
+                border: Border {
+                    color: MayaColors::SOLAR_AMBER,
+                    width: 1.0,
+                    radius: 4.0.into(),
+                },
+                ..Default::default()
+            }
+        })
+        .on_press(Message::EnterStudio);
+
+        let splash_card = container(
+            column![
+                title_row,
+                Space::new().height(4),
+                subtitle,
+                Space::new().height(12),
+                glyph_divider,
+                Space::new().height(16),
+                progress_bar,
+                Space::new().height(6),
+                row![
+                    status_label,
+                    Space::new().width(Length::Fill),
+                    percentage,
+                ]
+                .align_y(Alignment::Center)
+                .width(bar_width),
+                Space::new().height(18),
+                enter_button,
+            ]
+            .align_x(Alignment::Center)
+            .spacing(4)
+            .padding(Padding::from([28, 36]))
+        )
+        .style(|_theme| container::Style {
+            background: Some(Color { a: 0.92, ..MayaColors::OBSIDIAN_BASE }.into()),
+            border: Border {
+                color: MayaColors::SOLAR_GOLD,
+                width: 1.5,
+                radius: 8.0.into(),
+            },
+            ..Default::default()
+        });
+
+        let centered_card = container(splash_card)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .center_x(Length::Fill)
+            .center_y(Length::Fill);
+
+        stack![
+            bg,
+            vignette,
+            centered_card,
         ]
         .width(Length::Fill)
         .height(Length::Fill)

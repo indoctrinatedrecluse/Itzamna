@@ -8,6 +8,7 @@ license = "MIT"
 
 [dependencies]
 iced = { version = "0.14", features = ["canvas", "tokio", "image", "svg"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 tokio = { version = "1", features = ["full"] }
 chrono = { version = "0.4", features = ["serde"] }
 tracing = "0.1"
