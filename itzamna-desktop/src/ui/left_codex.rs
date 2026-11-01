@@ -1,14 +1,22 @@
 //! The Left Codex (El Códice)
 //! Hierarchical sidebar managing sanctuaries (repos), branches (Yaxche), tags (Lamat), stashes (Ak'bal), and remotes.
 
-use iced::widget::{button, column, container, row, scrollable, text, text_input, tooltip, Space};
+use iced::widget::{button, column, container, row, scrollable, text, text_input, Space};
 use iced::{Alignment, Border, Color, Element, Length, Padding};
 
 use crate::theme::MayaColors;
+use crate::ui::tooltip::{mayan_tooltip, Position};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CodexViewMode {
+    GitGlyphs,
+    WorkspaceRelics,
+}
 
 #[derive(Debug, Clone)]
 pub enum LeftCodexMessage {
     ToggleCollapse,
+    ToggleViewMode(CodexViewMode),
     SelectBranch(String),
     SelectTag(String),
     SelectStash(usize),
@@ -20,6 +28,10 @@ pub enum LeftCodexMessage {
     ConfirmCreateTag,
     FetchRemote,
     CreateStash,
+
+    // File Manager / Editor
+    OpenFileInEditor(String),
+    OpenFolderDialog,
 
     // Multi-Repo and Genesis Rituals
     ToggleRepoDropdown,
@@ -37,9 +49,11 @@ pub enum LeftCodexMessage {
 
 pub struct LeftCodex {
     pub is_collapsed: bool,
+    pub view_mode: CodexViewMode,
     pub current_repo_name: String,
     pub current_repo_path: String,
     pub recent_repos: Vec<String>,
+    pub workspace_files: Vec<String>,
     pub is_repo_dropdown_open: bool,
     pub is_clone_modal_open: bool,
     pub clone_url_input: String,
@@ -68,9 +82,11 @@ impl LeftCodex {
     pub fn new() -> Self {
         Self {
             is_collapsed: false,
+            view_mode: CodexViewMode::GitGlyphs,
             current_repo_name: "Itzamna".to_string(),
             current_repo_path: ".".to_string(),
             recent_repos: vec![".".to_string()],
+            workspace_files: Vec::new(),
             is_repo_dropdown_open: false,
             is_clone_modal_open: false,
             clone_url_input: "".to_string(),
@@ -134,32 +150,74 @@ impl LeftCodex {
         .align_y(Alignment::Center);
 
         let repo_section = self.render_repo_section();
-        let branches_section = self.render_branch_section();
-        let remotes_section = self.render_remote_section();
-        let tags_section = self.render_tag_section();
-        let stashes_section = self.render_stash_section();
 
-        let content_list = column![
-            repo_section,
-            Space::new().height(8),
-            branches_section,
-            Space::new().height(12),
-            remotes_section,
-            Space::new().height(12),
-            tags_section,
-            Space::new().height(12),
-            stashes_section,
+        let mode_switcher = row![
+            button(
+                text("🌿 Glyphs").size(10).color(if self.view_mode == CodexViewMode::GitGlyphs { MayaColors::SOLAR_GOLD } else { MayaColors::PARCHMENT_MUTED })
+            )
+            .padding(Padding::from([2, 8]))
+            .style(|_, _| button::Style {
+                background: Some(if self.view_mode == CodexViewMode::GitGlyphs { MayaColors::OBSIDIAN_SURFACE.into() } else { Color::TRANSPARENT.into() }),
+                border: Border { color: if self.view_mode == CodexViewMode::GitGlyphs { MayaColors::SOLAR_GOLD } else { MayaColors::OBSIDIAN_BORDER }, width: 1.0, radius: 3.0.into() },
+                ..Default::default()
+            })
+            .on_press(LeftCodexMessage::ToggleViewMode(CodexViewMode::GitGlyphs).into()),
+            Space::new().width(4),
+            button(
+                text(format!("📁 Relics ({})", self.workspace_files.len())).size(10).color(if self.view_mode == CodexViewMode::WorkspaceRelics { MayaColors::JADE_GLOW } else { MayaColors::PARCHMENT_MUTED })
+            )
+            .padding(Padding::from([2, 8]))
+            .style(|_, _| button::Style {
+                background: Some(if self.view_mode == CodexViewMode::WorkspaceRelics { MayaColors::OBSIDIAN_SURFACE.into() } else { Color::TRANSPARENT.into() }),
+                border: Border { color: if self.view_mode == CodexViewMode::WorkspaceRelics { MayaColors::JADE_GLOW } else { MayaColors::OBSIDIAN_BORDER }, width: 1.0, radius: 3.0.into() },
+                ..Default::default()
+            })
+            .on_press(LeftCodexMessage::ToggleViewMode(CodexViewMode::WorkspaceRelics).into()),
         ]
-        .padding(Padding::from([4, 10]))
-        .spacing(4);
+        .align_y(Alignment::Center);
+
+        let content_list = if self.view_mode == CodexViewMode::GitGlyphs {
+            let branches_section = self.render_branch_section();
+            let remotes_section = self.render_remote_section();
+            let tags_section = self.render_tag_section();
+            let stashes_section = self.render_stash_section();
+
+            column![
+                repo_section,
+                Space::new().height(6),
+                mode_switcher,
+                Space::new().height(8),
+                branches_section,
+                Space::new().height(12),
+                remotes_section,
+                Space::new().height(12),
+                tags_section,
+                Space::new().height(12),
+                stashes_section,
+            ]
+            .padding(Padding::from([4, 10]))
+            .spacing(4)
+        } else {
+            let relics_section = self.render_workspace_relics();
+
+            column![
+                repo_section,
+                Space::new().height(6),
+                mode_switcher,
+                Space::new().height(8),
+                relics_section,
+            ]
+            .padding(Padding::from([4, 10]))
+            .spacing(4)
+        };
 
         let body = scrollable(content_list).height(Length::Fill);
 
         container(column![header, body])
-            .width(250)
+            .width(260)
             .height(Length::Fill)
             .style(|_theme| container::Style {
-                background: Some(Color { a: 0.90, ..MayaColors::OBSIDIAN_BASE }.into()),
+                background: Some(Color { a: 0.94, ..MayaColors::OBSIDIAN_BASE }.into()),
                 border: Border {
                     color: MayaColors::OBSIDIAN_BORDER,
                     width: 1.0,
@@ -168,6 +226,75 @@ impl LeftCodex {
                 ..Default::default()
             })
             .into()
+    }
+
+    fn render_workspace_relics<'a, Message: 'a + From<LeftCodexMessage> + Clone>(&'a self) -> Element<'a, Message> {
+        let title_row = row![
+            text("WORKSPACE RELICS (FILES)").size(10).color(MayaColors::JADE_GLOW),
+            Space::new().width(Length::Fill),
+            text(format!("{} items", self.workspace_files.len())).size(8).color(MayaColors::GLYPH_DIM),
+        ]
+        .align_y(Alignment::Center);
+
+        let mut files_list = column![title_row, Space::new().height(4)].spacing(2);
+
+        if self.workspace_files.is_empty() {
+            files_list = files_list.push(
+                text("No files indexed in sanctuary").size(9).color(MayaColors::GLYPH_DIM)
+            );
+        } else {
+            for file_path in &self.workspace_files {
+                let icon = if file_path.ends_with(".rs") {
+                    "🦀"
+                } else if file_path.ends_with(".md") || file_path.ends_with(".txt") {
+                    "📝"
+                } else if file_path.ends_with(".toml") || file_path.ends_with(".json") || file_path.ends_with(".yaml") || file_path.ends_with(".yml") {
+                    "⚙️"
+                } else if file_path.ends_with(".iss") || file_path.ends_with(".ps1") || file_path.ends_with(".sh") {
+                    "📜"
+                } else {
+                    "📄"
+                };
+
+                let path_clone = file_path.clone();
+                let file_btn = mayan_tooltip(
+                    button(
+                        row![
+                            text(icon).size(10),
+                            Space::new().width(6),
+                            text(file_path).size(9).color(MayaColors::STARLIGHT_WHITE),
+                        ]
+                        .align_y(Alignment::Center)
+                    )
+                    .width(Length::Fill)
+                    .padding(Padding::from([3, 6]))
+                    .style(|_, status| {
+                        let (bg, border) = match status {
+                            button::Status::Hovered => (
+                                Color { a: 0.35, ..MayaColors::OBSIDIAN_SURFACE },
+                                MayaColors::SOLAR_GOLD,
+                            ),
+                            _ => (
+                                Color::TRANSPARENT,
+                                Color::TRANSPARENT,
+                            ),
+                        };
+                        button::Style {
+                            background: Some(bg.into()),
+                            border: Border { color: border, width: 0.8, radius: 2.0.into() },
+                            ..Default::default()
+                        }
+                    })
+                    .on_press(LeftCodexMessage::OpenFileInEditor(path_clone).into()),
+                    "Awaken file in the K'atun Code Editor to edit and commit",
+                    iced::widget::tooltip::Position::Right,
+                );
+
+                files_list = files_list.push(file_btn);
+            }
+        }
+
+        files_list.into()
     }
 
     fn render_repo_section<'a, Message: 'a + From<LeftCodexMessage> + Clone>(&'a self) -> Element<'a, Message> {
@@ -195,7 +322,37 @@ impl LeftCodex {
         .on_press(LeftCodexMessage::ToggleRepoDropdown.into());
 
         let actions = row![
-            tooltip(
+            mayan_tooltip(
+                button(
+                    row![
+                        text("📂").size(9),
+                        Space::new().width(3),
+                        text("Open").size(9).color(MayaColors::SOLAR_GOLD),
+                    ]
+                    .align_y(Alignment::Center)
+                )
+                .padding(Padding::from([2, 6]))
+                .style(|_theme, status| {
+                    let border_color = match status {
+                        button::Status::Hovered => MayaColors::SOLAR_GOLD,
+                        _ => MayaColors::OBSIDIAN_BORDER,
+                    };
+                    button::Style {
+                        background: Some(MayaColors::OBSIDIAN_BASE.into()),
+                        border: Border {
+                            color: border_color,
+                            width: 1.0,
+                            radius: 3.0.into(),
+                        },
+                        ..Default::default()
+                    }
+                })
+                .on_press(LeftCodexMessage::OpenFolderDialog.into()),
+                "Open a Git repository from filesystem (Ctrl+O)",
+                iced::widget::tooltip::Position::Bottom,
+            ),
+            Space::new().width(4),
+            mayan_tooltip(
                 button(text("🌐 Clone").size(9).color(MayaColors::MAYA_BLUE))
                     .padding(Padding::from([2, 6]))
                     .style(|_theme, _status| button::Style {
@@ -209,10 +366,10 @@ impl LeftCodex {
                     })
                     .on_press(LeftCodexMessage::OpenCloneModal.into()),
                 "Summon and clone an external repository via Git URL",
-                tooltip::Position::Bottom,
+                iced::widget::tooltip::Position::Bottom,
             ),
-            Space::new().width(6),
-            tooltip(
+            Space::new().width(4),
+            mayan_tooltip(
                 button(text("✨ Init").size(9).color(MayaColors::SOLAR_GOLD))
                     .padding(Padding::from([2, 6]))
                     .style(|_theme, _status| button::Style {
@@ -226,7 +383,7 @@ impl LeftCodex {
                     })
                     .on_press(LeftCodexMessage::OpenInitModal.into()),
                 "Sanctify a new local directory as a pristine Git sanctuary",
-                tooltip::Position::Bottom,
+                iced::widget::tooltip::Position::Bottom,
             ),
         ]
         .align_y(Alignment::Center);
@@ -373,7 +530,7 @@ impl LeftCodex {
         let title_row = row![
             text("🌿 YAXCHÉ (BRANCHES)").size(11).color(MayaColors::GLYPH_DIM),
             Space::new().width(Length::Fill),
-            tooltip(
+            mayan_tooltip(
                 button(text(if self.is_sprouting_branch { "✖" } else { "＋" }).size(11).color(MayaColors::JADE_GLOW))
                     .padding(Padding::from([0, 4]))
                     .style(|_theme, _status| button::Style {
@@ -382,7 +539,7 @@ impl LeftCodex {
                     })
                     .on_press(LeftCodexMessage::ToggleBranchInput.into()),
                 "Sprout a new branch from current HEAD (git branch)",
-                tooltip::Position::Top,
+                Position::Top,
             ),
         ]
         .align_y(Alignment::Center);
@@ -433,10 +590,10 @@ impl LeftCodex {
                 })
                 .on_press(LeftCodexMessage::SelectBranch(branch.clone()).into());
 
-            branch_list = branch_list.push(tooltip(
+            branch_list = branch_list.push(mayan_tooltip(
                 btn,
-                text(format!("Switch active branch to '{}' (git checkout)", branch)).size(9),
-                tooltip::Position::Right,
+                format!("Switch active branch to '{}' (git checkout)", branch),
+                Position::Right,
             ));
         }
 
@@ -447,7 +604,7 @@ impl LeftCodex {
         let title_row = row![
             text("🌐 REMOTES (PORTALS)").size(11).color(MayaColors::GLYPH_DIM),
             Space::new().width(Length::Fill),
-            tooltip(
+            mayan_tooltip(
                 button(text("⟳").size(11).color(MayaColors::MAYA_BLUE))
                     .padding(Padding::from([0, 4]))
                     .style(|_theme, _status| button::Style {
@@ -456,7 +613,7 @@ impl LeftCodex {
                     })
                     .on_press(LeftCodexMessage::FetchRemote.into()),
                 "Synchronize references from all configured remotes (git fetch)",
-                tooltip::Position::Top,
+                Position::Top,
             ),
         ]
         .align_y(Alignment::Center);
@@ -486,10 +643,10 @@ impl LeftCodex {
                     }
                 });
 
-            remote_list = remote_list.push(tooltip(
+            remote_list = remote_list.push(mayan_tooltip(
                 btn,
-                text(format!("Remote tracking branch: {}", remote)).size(9),
-                tooltip::Position::Right,
+                format!("Remote tracking branch: {}", remote),
+                Position::Right,
             ));
         }
 
@@ -500,7 +657,7 @@ impl LeftCodex {
         let title_row = row![
             text("🏷️ LAMAT (TAGS)").size(11).color(MayaColors::GLYPH_DIM),
             Space::new().width(Length::Fill),
-            tooltip(
+            mayan_tooltip(
                 button(text(if self.is_inscribing_tag { "✖" } else { "＋" }).size(11).color(MayaColors::SOLAR_GOLD))
                     .padding(Padding::from([0, 4]))
                     .style(|_theme, _status| button::Style {
@@ -509,7 +666,7 @@ impl LeftCodex {
                     })
                     .on_press(LeftCodexMessage::ToggleTagInput.into()),
                 "Inscribe a new tag seal on current HEAD (git tag)",
-                tooltip::Position::Top,
+                Position::Top,
             ),
         ]
         .align_y(Alignment::Center);
@@ -559,10 +716,10 @@ impl LeftCodex {
                     })
                     .on_press(LeftCodexMessage::SelectTag(tag.clone()).into());
 
-                tag_list = tag_list.push(tooltip(
+                tag_list = tag_list.push(mayan_tooltip(
                     btn,
-                    text(format!("View tag '{}' in history", tag)).size(9),
-                    tooltip::Position::Right,
+                    format!("View tag '{}' in history", tag),
+                    Position::Right,
                 ));
             }
         }
@@ -574,7 +731,7 @@ impl LeftCodex {
         let title_row = row![
             text("📦 AK'BAL (STASHES)").size(11).color(MayaColors::GLYPH_DIM),
             Space::new().width(Length::Fill),
-            tooltip(
+            mayan_tooltip(
                 button(text("＋").size(11).color(MayaColors::SOLAR_AMBER))
                     .padding(Padding::from([0, 4]))
                     .style(|_theme, _status| button::Style {
@@ -583,7 +740,7 @@ impl LeftCodex {
                     })
                     .on_press(LeftCodexMessage::CreateStash.into()),
                 "Stash dirty working tree into dark void of Ak'bal (git stash push)",
-                tooltip::Position::Top,
+                Position::Top,
             ),
         ]
         .align_y(Alignment::Center);
@@ -617,10 +774,10 @@ impl LeftCodex {
                     })
                     .on_press(LeftCodexMessage::SelectStash(idx).into());
 
-                stash_list = stash_list.push(tooltip(
+                stash_list = stash_list.push(mayan_tooltip(
                     btn,
-                    text(format!("Inspect and pop stash entry @{{{}}} (git stash pop)", idx)).size(9),
-                    tooltip::Position::Right,
+                    format!("Inspect and pop stash entry @{{{}}} (git stash pop)", idx),
+                    Position::Right,
                 ));
             }
         }

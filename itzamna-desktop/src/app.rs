@@ -11,11 +11,12 @@ use crate::config::AppConfig;
 use crate::git::{FileStatus, GitSanctuary};
 use crate::theme::MayaColors;
 use crate::ui::{
-    BlameMessage, BottomProphecy, CenterLoom, CenterLoomMessage, CenterTab, CommandPalette,
-    DiffMessage, FileEntry, GlyphRibbon, LeftCodex, LeftCodexMessage, MenuCategory, MergeMessage,
-    OracleMessage, PaletteMessage, PopolLogMessage, PortalMessage, ProphecyLevel, ProphecyMessage,
-    PurifierMessage, RebaseMessage, ReflogMessage, ResetMode, RightAltar, RightAltarMessage,
-    StatusBar, TopMenuBar, TopMenuMessage,
+    BlameMessage, BottomProphecy, CelestialWorkflows, CenterLoom, CenterLoomMessage, CenterTab,
+    CommandPalette, CredentialsMessage, CredentialsModal, DiffMessage, EditorMessage, FileEntry,
+    GlyphRibbon, LeftCodex, LeftCodexMessage, MenuCategory, MergeMessage, OracleMessage,
+    PaletteMessage, PopolLogMessage, PortalMessage, ProphecyLevel, ProphecyMessage, PurifierMessage,
+    RebaseMessage, ReflogMessage, ResetMode, RightAltar, RightAltarMessage, StatusBar, TopMenuBar,
+    TopMenuMessage, WorkflowMessage,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,6 +35,7 @@ pub enum Message {
     RightAltar(RightAltarMessage),
     Prophecy(ProphecyMessage),
     Palette(PaletteMessage),
+    Credentials(CredentialsMessage),
     KeyboardEvent(iced::keyboard::Event),
 }
 
@@ -51,6 +53,7 @@ pub struct ItzamnaApp {
     bottom_prophecy: BottomProphecy,
     status_bar: StatusBar,
     palette: CommandPalette,
+    credentials_modal: CredentialsModal,
     background_mode: BackgroundMode,
     static_bg_handle: image::Handle,
     video_frames: Vec<image::Handle>,
@@ -214,6 +217,7 @@ impl ItzamnaApp {
             center_loom.chac_purifier.set_stashes(s.list_detailed_stashes());
             center_loom.overseer_portals.remotes = s.get_remote_details();
             center_loom.overseer_portals.active_branch = head_branch.clone();
+            left_codex.workspace_files = s.list_workspace_files();
         }
 
         Self {
@@ -230,6 +234,7 @@ impl ItzamnaApp {
             bottom_prophecy,
             status_bar,
             palette: CommandPalette::new(),
+            credentials_modal: CredentialsModal::new(),
             background_mode: match config.background_mode.as_str() {
                 "procedural" => BackgroundMode::ProceduralLoom,
                 "static" => BackgroundMode::StaticArtwork,
@@ -322,6 +327,7 @@ impl ItzamnaApp {
         self.center_loom.chac_purifier.set_stashes(s.list_detailed_stashes());
         self.center_loom.overseer_portals.remotes = s.get_remote_details();
         self.center_loom.overseer_portals.active_branch = head_branch;
+        self.left_codex.workspace_files = s.list_workspace_files();
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
@@ -461,6 +467,53 @@ impl ItzamnaApp {
                 }
                 TopMenuMessage::ToggleKeybindings => {
                     self.palette.is_help_open = !self.palette.is_help_open;
+                    Task::none()
+                }
+                TopMenuMessage::OpenProjectFolder => {
+                    if let Some(folder) = rfd::FileDialog::new().pick_folder() {
+                        let path_str = folder.to_string_lossy().to_string();
+                        self.open_sanctuary(&path_str);
+                    }
+                    Task::none()
+                }
+                TopMenuMessage::Pull => {
+                    let branch = self.left_codex.active_branch.clone();
+                    if let Some(ref s) = self.sanctuary {
+                        match s.pull_rebase(&branch) {
+                            Ok(msg) => {
+                                self.bottom_prophecy.push("23:55:00", "⬇️", msg, ProphecyLevel::Jade);
+                            }
+                            Err(e) => {
+                                self.bottom_prophecy.push("23:55:00", "⚠️", format!("Pull failed: {}", e), ProphecyLevel::Xibalba);
+                            }
+                        }
+                    }
+                    self.refresh_git_state();
+                    Task::none()
+                }
+                TopMenuMessage::Push => {
+                    let branch = self.left_codex.active_branch.clone();
+                    if let Some(ref s) = self.sanctuary {
+                        match s.push_origin(&branch) {
+                            Ok(msg) => {
+                                self.bottom_prophecy.push("23:55:00", "⬆️", msg, ProphecyLevel::Solar);
+                            }
+                            Err(e) => {
+                                self.bottom_prophecy.push("23:55:00", "⚠️", format!("Push failed: {}", e), ProphecyLevel::Xibalba);
+                            }
+                        }
+                    }
+                    self.refresh_git_state();
+                    Task::none()
+                }
+                TopMenuMessage::OpenCredentials => {
+                    if let Some(ref s) = self.sanctuary {
+                        let (name, email, remote) = s.get_local_credentials();
+                        self.credentials_modal.name = name;
+                        self.credentials_modal.email = email;
+                        self.credentials_modal.remote_url = remote;
+                    }
+                    self.credentials_modal.is_open = true;
                     Task::none()
                 }
             },
@@ -646,6 +699,23 @@ impl ItzamnaApp {
                                 self.bottom_prophecy.push("23:55:00", "🌑", format!("Genesis ritual thwarted: {}", e), ProphecyLevel::Xibalba);
                             }
                         }
+                    }
+                    Task::none()
+                }
+                LeftCodexMessage::ToggleViewMode(mode) => {
+                    self.left_codex.view_mode = mode;
+                    Task::none()
+                }
+                LeftCodexMessage::OpenFileInEditor(path) => {
+                    let _ = self.center_loom.katun_editor.load_file(path.clone());
+                    self.center_loom.active_tab = CenterTab::KatunEditor;
+                    self.bottom_prophecy.push("23:55:00", "📜", format!("Opened relic in Katun Code Editor: {}", path), ProphecyLevel::Jade);
+                    Task::none()
+                }
+                LeftCodexMessage::OpenFolderDialog => {
+                    if let Some(folder) = rfd::FileDialog::new().pick_folder() {
+                        let path_str = folder.to_string_lossy().to_string();
+                        self.open_sanctuary(&path_str);
                     }
                     Task::none()
                 }
@@ -1020,6 +1090,8 @@ impl ItzamnaApp {
                     self.center_loom.active_tab = tab;
                     if tab == CenterTab::OracleRadar {
                         Task::done(Message::CenterLoom(CenterLoomMessage::Oracle(OracleMessage::RefreshTelemetry)))
+                    } else if tab == CenterTab::CelestialWorkflows {
+                        Task::done(Message::CenterLoom(CenterLoomMessage::Workflows(WorkflowMessage::RefreshRuns)))
                     } else {
                         Task::none()
                     }
@@ -1054,6 +1126,75 @@ impl ItzamnaApp {
                 CenterLoomMessage::CloseCommitDetails => {
                     self.center_loom.selected_commit = None;
                     self.center_loom.detailed_commit = None;
+                    Task::none()
+                }
+                CenterLoomMessage::Editor(e_msg) => match e_msg {
+                    EditorMessage::StageAndSave => {
+                        let _ = self.center_loom.katun_editor.save();
+                        if let Some(p) = self.center_loom.katun_editor.file_path.clone() {
+                            if let Some(ref s) = self.sanctuary {
+                                let _ = s.stage_path(&p);
+                                self.refresh_git_state();
+                                self.bottom_prophecy.push("23:55:00", "✨", format!("Saved & offered to Altar: {}", p), ProphecyLevel::Jade);
+                            }
+                        }
+                        Task::none()
+                    }
+                    _ => {
+                        self.center_loom.katun_editor.update(e_msg);
+                        Task::none()
+                    }
+                },
+                CenterLoomMessage::Workflows(w_msg) => match w_msg {
+                    WorkflowMessage::RefreshRuns => {
+                        self.center_loom.celestial_workflows.is_loading = true;
+                        self.bottom_prophecy.push("23:55:00", "⚡", "Querying GitHub Celestial Workflows (gh run list)...".into(), ProphecyLevel::Maya);
+                        Task::perform(async { CelestialWorkflows::fetch_runs() }, |res| {
+                            Message::CenterLoom(CenterLoomMessage::Workflows(WorkflowMessage::RunsReceived(res)))
+                        })
+                    }
+                    WorkflowMessage::RunsReceived(res) | WorkflowMessage::RunsLoaded(res) => {
+                        self.center_loom.celestial_workflows.apply_runs(res);
+                        let count = self.center_loom.celestial_workflows.runs.len();
+                        self.bottom_prophecy.push("23:55:00", "✨", format!("Fetched {} GitHub celestial workflow executions", count), ProphecyLevel::Jade);
+                        Task::none()
+                    }
+                    WorkflowMessage::GhInstallStatus(st) => {
+                        self.center_loom.celestial_workflows.status_message = Some(st);
+                        Task::none()
+                    }
+                    WorkflowMessage::OpenRunUrl(url) => {
+                        let _ = std::process::Command::new("cmd")
+                            .args(["/C", "start", "", &url])
+                            .spawn();
+                        self.bottom_prophecy.push("23:55:00", "🌐", format!("Opening celestial workflow portal: {}", url), ProphecyLevel::Solar);
+                        Task::none()
+                    }
+                    WorkflowMessage::InstallGhCli => {
+                        self.bottom_prophecy.push("23:55:00", "⚡", "Initiating GitHub CLI installation via winget...".into(), ProphecyLevel::Solar);
+                        let _ = std::process::Command::new("cmd")
+                            .args(["/C", "start", "powershell", "-NoExit", "-Command", "winget install --id GitHub.cli -e --source winget"])
+                            .spawn();
+                        Task::none()
+                    }
+                },
+                CenterLoomMessage::OpenFileInEditor(path) => {
+                    let _ = self.center_loom.katun_editor.load_file(path.clone());
+                    self.center_loom.active_tab = CenterTab::KatunEditor;
+                    self.bottom_prophecy.push("23:55:00", "📜", format!("Opened relic in Katun Code Editor: {}", path), ProphecyLevel::Jade);
+                    Task::none()
+                }
+                CenterLoomMessage::AmendCommit(sha) => {
+                    self.center_loom.active_tab = CenterTab::YaxcheDag;
+                    self.right_altar.is_collapsed = false;
+                    self.right_altar.is_amending = true;
+                    if let Some(ref s) = self.sanctuary {
+                        if let Some(det) = s.find_detailed_commit(&sha) {
+                            self.right_altar.commit_summary = det.summary.clone();
+                            self.right_altar.commit_description = det.full_message.strip_prefix(&det.summary).map(|s| s.trim().to_string()).unwrap_or_default();
+                        }
+                    }
+                    self.bottom_prophecy.push("23:55:00", "🔄", format!("Amending commit [{}] in Altar of Creation", &sha[..7.min(sha.len())]), ProphecyLevel::Solar);
                     Task::none()
                 }
             },
@@ -1125,6 +1266,35 @@ impl ItzamnaApp {
                     self.right_altar.commit_description = d;
                     Task::none()
                 }
+                RightAltarMessage::ToggleAmend => {
+                    self.right_altar.is_amending = !self.right_altar.is_amending;
+                    if self.right_altar.is_amending {
+                        if let Some(ref s) = self.sanctuary {
+                            let (_, head_sha) = s.get_head_info();
+                            if let Some(det) = s.find_detailed_commit(&head_sha) {
+                                self.right_altar.commit_summary = det.summary.clone();
+                                self.right_altar.commit_description = det.full_message.strip_prefix(&det.summary).map(|s| s.trim().to_string()).unwrap_or_default();
+                                self.bottom_prophecy.push("23:55:00", "🔄", format!("Amending HEAD commit [{}]", &head_sha[..7.min(head_sha.len())]), ProphecyLevel::Solar);
+                            }
+                        }
+                    }
+                    Task::none()
+                }
+                RightAltarMessage::PushAfterCommit => {
+                    let branch = self.left_codex.active_branch.clone();
+                    if let Some(ref s) = self.sanctuary {
+                        match s.push_origin(&branch) {
+                            Ok(msg) => {
+                                self.bottom_prophecy.push("23:55:00", "⬆️", msg, ProphecyLevel::Solar);
+                            }
+                            Err(e) => {
+                                self.bottom_prophecy.push("23:55:00", "⚠️", format!("Push failed: {}", e), ProphecyLevel::Xibalba);
+                            }
+                        }
+                    }
+                    self.refresh_git_state();
+                    Task::none()
+                }
                 RightAltarMessage::InscribeCommit => {
                     let summary = self.right_altar.commit_summary.trim().to_string();
                     let desc = self.right_altar.commit_description.trim().to_string();
@@ -1135,15 +1305,32 @@ impl ItzamnaApp {
                     }
 
                     if let Some(ref s) = self.sanctuary {
-                        match s.create_commit(&summary, &desc) {
-                            Ok(oid) => {
-                                let short = oid[..7.min(oid.len())].to_string();
-                                self.bottom_prophecy.push("23:55:00", "🔥", format!("Sealed in stone: [{}] '{}'", short, summary), ProphecyLevel::Solar);
-                                self.right_altar.commit_summary.clear();
-                                self.right_altar.commit_description.clear();
+                        if self.right_altar.is_amending {
+                            match s.amend_commit(&summary, &desc) {
+                                Ok(oid) => {
+                                    let short = oid[..7.min(oid.len())].to_string();
+                                    self.bottom_prophecy.push("23:55:00", "🔥", format!("Amended in stone: [{}] '{}'", short, summary), ProphecyLevel::Solar);
+                                    self.right_altar.commit_summary.clear();
+                                    self.right_altar.commit_description.clear();
+                                    self.right_altar.last_committed_sha = Some(oid);
+                                    self.right_altar.is_amending = false;
+                                }
+                                Err(e) => {
+                                    self.bottom_prophecy.push("23:55:00", "⚠️", format!("Failed amending commit: {}", e), ProphecyLevel::Xibalba);
+                                }
                             }
-                            Err(e) => {
-                                self.bottom_prophecy.push("23:55:00", "⚠️", format!("Failed creating commit: {}", e), ProphecyLevel::Xibalba);
+                        } else {
+                            match s.create_commit(&summary, &desc) {
+                                Ok(oid) => {
+                                    let short = oid[..7.min(oid.len())].to_string();
+                                    self.bottom_prophecy.push("23:55:00", "🔥", format!("Sealed in stone: [{}] '{}'", short, summary), ProphecyLevel::Solar);
+                                    self.right_altar.commit_summary.clear();
+                                    self.right_altar.commit_description.clear();
+                                    self.right_altar.last_committed_sha = Some(oid);
+                                }
+                                Err(e) => {
+                                    self.bottom_prophecy.push("23:55:00", "⚠️", format!("Failed creating commit: {}", e), ProphecyLevel::Xibalba);
+                                }
                             }
                         }
                     }
@@ -1287,6 +1474,27 @@ impl ItzamnaApp {
                         "action_toggle_codex" => {
                             self.left_codex.is_collapsed = !self.left_codex.is_collapsed;
                         }
+                        "tab_editor" => {
+                            self.center_loom.active_tab = CenterTab::KatunEditor;
+                            self.bottom_prophecy.push("23:55:00", "✍️", "Transported to Katun Code Editor".to_string(), ProphecyLevel::Jade);
+                        }
+                        "tab_workflows" => {
+                            self.center_loom.active_tab = CenterTab::CelestialWorkflows;
+                            self.bottom_prophecy.push("23:55:00", "🚀", "Transported to Celestial Workflows".to_string(), ProphecyLevel::Solar);
+                            return Task::done(Message::CenterLoom(CenterLoomMessage::Workflows(WorkflowMessage::RefreshRuns)));
+                        }
+                        "action_open_folder" => {
+                            return Task::done(Message::TopMenu(TopMenuMessage::OpenProjectFolder));
+                        }
+                        "action_pull" => {
+                            return Task::done(Message::TopMenu(TopMenuMessage::Pull));
+                        }
+                        "action_push" => {
+                            return Task::done(Message::TopMenu(TopMenuMessage::Push));
+                        }
+                        "action_credentials" => {
+                            return Task::done(Message::TopMenu(TopMenuMessage::OpenCredentials));
+                        }
                         "action_shortcuts" => {
                             self.palette.is_help_open = true;
                         }
@@ -1300,6 +1508,46 @@ impl ItzamnaApp {
                 }
                 PaletteMessage::CloseHelp => {
                     self.palette.is_help_open = false;
+                    Task::none()
+                }
+            },
+            Message::Credentials(c_msg) => match c_msg {
+                CredentialsMessage::Open => {
+                    self.credentials_modal.is_open = true;
+                    Task::none()
+                }
+                CredentialsMessage::NameChanged(v) => {
+                    self.credentials_modal.name = v;
+                    Task::none()
+                }
+                CredentialsMessage::EmailChanged(v) => {
+                    self.credentials_modal.email = v;
+                    Task::none()
+                }
+                CredentialsMessage::RemoteUrlChanged(v) => {
+                    self.credentials_modal.remote_url = v;
+                    Task::none()
+                }
+                CredentialsMessage::Save => {
+                    let name = self.credentials_modal.name.trim();
+                    let email = self.credentials_modal.email.trim();
+                    let remote = self.credentials_modal.remote_url.trim();
+                    if let Some(ref s) = self.sanctuary {
+                        match s.set_local_credentials(name, email, remote) {
+                            Ok(_) => {
+                                self.credentials_modal.is_open = false;
+                                self.bottom_prophecy.push("23:55:00", "✨", "Inscribed local sanctuary credentials in stone (.git/config)".into(), ProphecyLevel::Jade);
+                            }
+                            Err(e) => {
+                                self.bottom_prophecy.push("23:55:00", "⚠️", format!("Failed saving credentials: {}", e), ProphecyLevel::Xibalba);
+                            }
+                        }
+                    }
+                    self.refresh_git_state();
+                    Task::none()
+                }
+                CredentialsMessage::Close => {
+                    self.credentials_modal.is_open = false;
                     Task::none()
                 }
             },
@@ -1334,6 +1582,22 @@ impl ItzamnaApp {
                         } else if lower == "b" {
                             self.left_codex.is_collapsed = !self.left_codex.is_collapsed;
                             return Task::none();
+                        } else if lower == "o" {
+                            return Task::done(Message::TopMenu(TopMenuMessage::OpenProjectFolder));
+                        } else if lower == "e" {
+                            self.center_loom.active_tab = CenterTab::KatunEditor;
+                            return Task::none();
+                        } else if lower == "s" {
+                            if self.center_loom.active_tab == CenterTab::KatunEditor {
+                                let _ = self.center_loom.katun_editor.save();
+                                if let Some(p) = &self.center_loom.katun_editor.file_path {
+                                    self.bottom_prophecy.push("23:55:00", "💾", format!("Inscribed relic to disk: {}", p), ProphecyLevel::Jade);
+                                }
+                            }
+                            return Task::none();
+                        } else if lower == "w" {
+                            self.center_loom.active_tab = CenterTab::CelestialWorkflows;
+                            return Task::done(Message::CenterLoom(CenterLoomMessage::Workflows(WorkflowMessage::RefreshRuns)));
                         } else if lower == "l" {
                             self.background_mode = self.background_mode.next();
                             self.top_menu.background_mode = self.background_mode;
@@ -1457,6 +1721,10 @@ impl ItzamnaApp {
 
         if let Some(pal_view) = self.palette.view() {
             layers.push(pal_view.map(Message::Palette));
+        }
+
+        if let Some(cred_view) = self.credentials_modal.view() {
+            layers.push(cred_view.map(Message::Credentials));
         }
 
         iced::widget::Stack::with_children(layers)

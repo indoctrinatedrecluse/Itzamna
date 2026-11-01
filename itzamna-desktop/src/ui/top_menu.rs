@@ -2,11 +2,12 @@
 //! Mayan-themed navigation hierarchy framing the application window with
 //! dynamic background mode switcher.
 
-use iced::widget::{button, container, row, text, tooltip, Space};
+use iced::widget::{button, container, row, text, Space};
 use iced::{Alignment, Border, Color, Element, Length, Padding};
 
 use crate::canvas::BackgroundMode;
 use crate::theme::MayaColors;
+use crate::ui::tooltip::mayan_tooltip;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MenuCategory {
@@ -28,6 +29,10 @@ pub enum TopMenuMessage {
     FetchPulse,
     OpenCommandPalette,
     ToggleKeybindings,
+    OpenProjectFolder,
+    Pull,
+    Push,
+    OpenCredentials,
 }
 
 pub struct TopMenuBar {
@@ -79,12 +84,150 @@ impl TopMenuBar {
         };
 
         let quick_actions = row![
-            tooltip(
+            // 1. Open Sanctuary (Project Folder)
+            mayan_tooltip(
+                button(
+                    row![
+                        text("📂").size(11),
+                        Space::new().width(4),
+                        text("Open Sanctuary").size(11).color(MayaColors::SOLAR_GOLD),
+                        Space::new().width(4),
+                        text("Ctrl+O").size(9).color(MayaColors::GLYPH_DIM),
+                    ]
+                    .align_y(Alignment::Center)
+                )
+                .padding(Padding::from([4, 9]))
+                .style(|_theme, status| {
+                    let border_color = match status {
+                        button::Status::Hovered => MayaColors::SOLAR_GOLD,
+                        _ => MayaColors::OBSIDIAN_BORDER,
+                    };
+                    button::Style {
+                        background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
+                        border: Border { color: border_color, width: 1.0, radius: 4.0.into() },
+                        ..Default::default()
+                    }
+                })
+                .on_press(TopMenuMessage::OpenProjectFolder.into()),
+                "Open a Git repository from your local filesystem (Ctrl+O)",
+                iced::widget::tooltip::Position::Bottom,
+            ),
+
+            // 2. Git Pull
+            mayan_tooltip(
+                button(
+                    row![
+                        text("⬇️").size(10),
+                        Space::new().width(4),
+                        text("Pull").size(11).color(MayaColors::JADE_GLOW),
+                    ]
+                    .align_y(Alignment::Center)
+                )
+                .padding(Padding::from([4, 8]))
+                .style(|_theme, status| {
+                    let border_color = match status {
+                        button::Status::Hovered => MayaColors::JADE_GLOW,
+                        _ => MayaColors::OBSIDIAN_BORDER,
+                    };
+                    button::Style {
+                        background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
+                        border: Border { color: border_color, width: 1.0, radius: 4.0.into() },
+                        ..Default::default()
+                    }
+                })
+                .on_press(TopMenuMessage::Pull.into()),
+                "Pull and rebase commits from remote tracking branch (git pull --rebase)",
+                iced::widget::tooltip::Position::Bottom,
+            ),
+
+            // 3. Git Push
+            mayan_tooltip(
+                button(
+                    row![
+                        text("⬆️").size(10),
+                        Space::new().width(4),
+                        text("Push").size(11).color(MayaColors::SOLAR_GOLD),
+                    ]
+                    .align_y(Alignment::Center)
+                )
+                .padding(Padding::from([4, 8]))
+                .style(|_theme, status| {
+                    let border_color = match status {
+                        button::Status::Hovered => MayaColors::SOLAR_GOLD,
+                        _ => MayaColors::OBSIDIAN_BORDER,
+                    };
+                    button::Style {
+                        background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
+                        border: Border { color: border_color, width: 1.0, radius: 4.0.into() },
+                        ..Default::default()
+                    }
+                })
+                .on_press(TopMenuMessage::Push.into()),
+                "Push sovereign commits to remote horizon (git push origin)",
+                iced::widget::tooltip::Position::Bottom,
+            ),
+
+            // 4. Git Fetch
+            mayan_tooltip(
+                button(
+                    row![
+                        text("🔄").size(10),
+                        Space::new().width(4),
+                        text("Fetch").size(11).color(MayaColors::MAYA_BLUE),
+                    ]
+                    .align_y(Alignment::Center)
+                )
+                .padding(Padding::from([4, 8]))
+                .style(|_theme, status| {
+                    let border_color = match status {
+                        button::Status::Hovered => MayaColors::MAYA_BLUE,
+                        _ => MayaColors::OBSIDIAN_BORDER,
+                    };
+                    button::Style {
+                        background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
+                        border: Border { color: border_color, width: 1.0, radius: 4.0.into() },
+                        ..Default::default()
+                    }
+                })
+                .on_press(TopMenuMessage::FetchPulse.into()),
+                "Fetch remote branch updates and prune stale refs (git fetch --prune)",
+                iced::widget::tooltip::Position::Bottom,
+            ),
+
+            // 5. Git Credentials
+            mayan_tooltip(
+                button(
+                    row![
+                        text("⚙️").size(10),
+                        Space::new().width(4),
+                        text("Identity").size(11).color(MayaColors::STARLIGHT_WHITE),
+                    ]
+                    .align_y(Alignment::Center)
+                )
+                .padding(Padding::from([4, 8]))
+                .style(|_theme, status| {
+                    let border_color = match status {
+                        button::Status::Hovered => MayaColors::SOLAR_GOLD,
+                        _ => MayaColors::OBSIDIAN_BORDER,
+                    };
+                    button::Style {
+                        background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
+                        border: Border { color: border_color, width: 1.0, radius: 4.0.into() },
+                        ..Default::default()
+                    }
+                })
+                .on_press(TopMenuMessage::OpenCredentials.into()),
+                "Configure local repository Git credentials (user.name, user.email, remote URL)",
+                iced::widget::tooltip::Position::Bottom,
+            ),
+
+            // 6. Command Palette
+            mayan_tooltip(
                 button(
                     row![
                         text("🔍").size(10),
                         Space::new().width(4),
-                        text("Rituals").size(11).color(MayaColors::MAYA_BLUE),
+                        text("Palette").size(11).color(MayaColors::MAYA_BLUE),
                         Space::new().width(4),
                         text("Ctrl+P").size(9).color(MayaColors::GLYPH_DIM),
                     ]
@@ -98,58 +241,23 @@ impl TopMenuBar {
                     };
                     button::Style {
                         background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
-                        border: Border {
-                            color: border_color,
-                            width: 1.0,
-                            radius: 4.0.into(),
-                        },
+                        border: Border { color: border_color, width: 1.0, radius: 4.0.into() },
                         ..Default::default()
                     }
                 })
                 .on_press(TopMenuMessage::OpenCommandPalette.into()),
-                text("Open Command Palette to search and execute all sacred rituals (Ctrl+P)").size(11),
-                tooltip::Position::Bottom,
+                "Open Command Palette to search and execute all sacred rituals (Ctrl+P)",
+                iced::widget::tooltip::Position::Bottom,
             ),
 
-            tooltip(
-                button(
-                    row![
-                        text("⌨️").size(10),
-                        Space::new().width(4),
-                        text("Map").size(11).color(MayaColors::SOLAR_GOLD),
-                        Space::new().width(4),
-                        text("F1").size(9).color(MayaColors::GLYPH_DIM),
-                    ]
-                    .align_y(Alignment::Center)
-                )
-                .padding(Padding::from([4, 8]))
-                .style(|_theme, status| {
-                    let border_color = match status {
-                        button::Status::Hovered => MayaColors::SOLAR_GOLD,
-                        _ => MayaColors::OBSIDIAN_BORDER,
-                    };
-                    button::Style {
-                        background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
-                        border: Border {
-                            color: border_color,
-                            width: 1.0,
-                            radius: 4.0.into(),
-                        },
-                        ..Default::default()
-                    }
-                })
-                .on_press(TopMenuMessage::ToggleKeybindings.into()),
-                text("Reveal the complete Sacred Glyph Keyboard Map (F1 or ?)").size(11),
-                tooltip::Position::Bottom,
-            ),
-
-            tooltip(
+            // 7. Background Mode Cycle
+            mayan_tooltip(
                 button(
                     text(self.background_mode.label())
                         .size(11)
                         .color(loom_color)
                 )
-                .padding(Padding::from([4, 10]))
+                .padding(Padding::from([4, 9]))
                 .style(move |_theme, status| {
                     let border_color = match status {
                         button::Status::Hovered => loom_color,
@@ -158,45 +266,13 @@ impl TopMenuBar {
                     button::Style {
                         background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
                         text_color: MayaColors::STARLIGHT_WHITE,
-                        border: Border {
-                            color: border_color,
-                            width: 1.0,
-                            radius: 4.0.into(),
-                        },
+                        border: Border { color: border_color, width: 1.0, radius: 4.0.into() },
                         ..Default::default()
                     }
                 })
                 .on_press(TopMenuMessage::CycleBackgroundMode.into()),
-                text("Cycle canvas background (Procedural / Stealth / Static / Video)").size(11),
-                tooltip::Position::Bottom,
-            ),
-
-            tooltip(
-                button(
-                    text("⚡ Fetch Pulse")
-                        .size(11)
-                        .color(MayaColors::SOLAR_AMBER)
-                )
-                .padding(Padding::from([4, 10]))
-                .style(|_theme, status| {
-                    let border_color = match status {
-                        button::Status::Hovered => MayaColors::SOLAR_GOLD,
-                        _ => MayaColors::OBSIDIAN_BORDER,
-                    };
-                    button::Style {
-                        background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
-                        text_color: MayaColors::SOLAR_AMBER,
-                        border: Border {
-                            color: border_color,
-                            width: 1.0,
-                            radius: 4.0.into(),
-                        },
-                        ..Default::default()
-                    }
-                })
-                .on_press(TopMenuMessage::FetchPulse.into()),
-                text("Fetch remote branches and sync refs (git fetch origin)").size(11),
-                tooltip::Position::Bottom,
+                "Cycle canvas background (Procedural / Stealth / Static / Video)",
+                iced::widget::tooltip::Position::Bottom,
             ),
         ]
         .spacing(6)
@@ -204,7 +280,7 @@ impl TopMenuBar {
 
         let content = row![
             logo,
-            Space::new().width(18),
+            Space::new().width(16),
             menu_buttons,
             Space::new().width(Length::Fill),
             quick_actions,
@@ -215,7 +291,7 @@ impl TopMenuBar {
         container(content)
             .width(Length::Fill)
             .style(|_theme| container::Style {
-                background: Some(Color { a: 0.94, ..MayaColors::OBSIDIAN_BASE }.into()),
+                background: Some(Color { a: 0.94, ..MayaColors::OBSIDIAN_BASE }.into()), // Solid opaque!
                 border: Border {
                     color: MayaColors::OBSIDIAN_BORDER,
                     width: 0.0,
@@ -282,6 +358,6 @@ impl TopMenuBar {
             })
             .on_press(TopMenuMessage::SelectMenu(category).into());
 
-        tooltip(btn, text(tooltip_desc).size(11), tooltip::Position::Bottom).into()
+        mayan_tooltip(btn, tooltip_desc, iced::widget::tooltip::Position::Bottom)
     }
 }

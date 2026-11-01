@@ -1,7 +1,7 @@
 //! The Center Commit Viewport (El Telar de Yaxche)
 //! Integrates GPU DagCanvas, Stone Diff Workbench, Rebase Crucible, and Oracle Radar.
 
-use iced::widget::{button, column, container, row, scrollable, text, tooltip, Space};
+use iced::widget::{button, column, container, row, scrollable, text, Space};
 use iced::{Alignment, Border, Color, Element, Length, Padding};
 
 use crate::canvas::{DagCanvas, DagMessage};
@@ -9,6 +9,7 @@ use crate::git::{DetailedCommit, GitCommitNode};
 use crate::theme::MayaColors;
 use crate::ui::ahau_blame::{AhauBlameWorkbench, BlameMessage};
 use crate::ui::chac_purifier::{ChacPurifierWorkbench, PurifierMessage};
+use crate::ui::code_editor::{EditorMessage, KatunEditor};
 use crate::ui::diff_workbench::{DiffMessage, DiffWorkbench};
 use crate::ui::kukulcan_merge::{KukulcanMergeWorkbench, MergeMessage};
 use crate::ui::markdown::MayanMarkdown;
@@ -16,12 +17,15 @@ use crate::ui::oracle_radar::{OracleMessage, OracleRadar};
 use crate::ui::overseer_portals::{OverseerPortalsWorkbench, PortalMessage};
 use crate::ui::popol_vuh_log::{PopolLogMessage, PopolVuhLogWorkbench};
 use crate::ui::rebase_crucible::{RebaseCrucible, RebaseMessage};
+use crate::ui::tooltip::{mayan_tooltip, Position};
+use crate::ui::workflow_runs::{CelestialWorkflows, WorkflowMessage};
 use crate::ui::xibalba_reflog::{ReflogMessage, XibalbaReflogWorkbench};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CenterTab {
     YaxcheDag,
     StoneDiff,
+    KatunEditor,
     AhauBlame,
     PopolVuhLog,
     RebaseCrucible,
@@ -29,6 +33,7 @@ pub enum CenterTab {
     XibalbaReflog,
     ChacPurifier,
     OverseerPortals,
+    CelestialWorkflows,
     OracleRadar,
 }
 
@@ -36,6 +41,8 @@ pub enum CenterTab {
 pub enum CenterLoomMessage {
     Dag(DagMessage),
     Diff(DiffMessage),
+    Editor(EditorMessage),
+    Workflows(WorkflowMessage),
     Blame(BlameMessage),
     PopolLog(PopolLogMessage),
     Rebase(RebaseMessage),
@@ -49,14 +56,17 @@ pub enum CenterLoomMessage {
     ZoomOut,
     ResetZoom,
     OpenFileInDiff(String),
+    OpenFileInEditor(String),
     SelectParent(String),
     CloseCommitDetails,
+    AmendCommit(String),
 }
 
 pub struct CenterLoom {
     pub active_tab: CenterTab,
     pub dag: DagCanvas,
     pub diff_workbench: DiffWorkbench,
+    pub katun_editor: KatunEditor,
     pub ahau_blame: AhauBlameWorkbench,
     pub popol_log: PopolVuhLogWorkbench,
     pub rebase_crucible: RebaseCrucible,
@@ -64,6 +74,7 @@ pub struct CenterLoom {
     pub xibalba_reflog: XibalbaReflogWorkbench,
     pub chac_purifier: ChacPurifierWorkbench,
     pub overseer_portals: OverseerPortalsWorkbench,
+    pub celestial_workflows: CelestialWorkflows,
     pub oracle_radar: OracleRadar,
     pub selected_commit: Option<GitCommitNode>,
     pub detailed_commit: Option<DetailedCommit>,
@@ -82,6 +93,7 @@ impl CenterLoom {
             active_tab: CenterTab::YaxcheDag,
             dag: DagCanvas::new(commits),
             diff_workbench: DiffWorkbench::default(),
+            katun_editor: KatunEditor::new(),
             ahau_blame: AhauBlameWorkbench::default(),
             popol_log: PopolVuhLogWorkbench::default(),
             rebase_crucible: RebaseCrucible::new(),
@@ -89,6 +101,7 @@ impl CenterLoom {
             xibalba_reflog: XibalbaReflogWorkbench::default(),
             chac_purifier: ChacPurifierWorkbench::default(),
             overseer_portals: OverseerPortalsWorkbench::default(),
+            celestial_workflows: CelestialWorkflows::new(),
             oracle_radar: OracleRadar::new(),
             selected_commit,
             detailed_commit: None,
@@ -120,6 +133,8 @@ impl CenterLoom {
             Space::new().width(2),
             self.tab_button("🔪 DIFF", CenterTab::StoneDiff),
             Space::new().width(2),
+            self.tab_button("📝 EDITOR", CenterTab::KatunEditor),
+            Space::new().width(2),
             self.tab_button("👑 BLAME", CenterTab::AhauBlame),
             Space::new().width(2),
             self.tab_button("📜 LOG", CenterTab::PopolVuhLog),
@@ -134,6 +149,8 @@ impl CenterLoom {
             Space::new().width(2),
             self.tab_button("🌐 REMOTES", CenterTab::OverseerPortals),
             Space::new().width(2),
+            self.tab_button("⚡ ACTIONS", CenterTab::CelestialWorkflows),
+            Space::new().width(2),
             self.tab_button("🔮 RADAR", CenterTab::OracleRadar),
             Space::new().width(8),
             text(format!("{} Commits", self.dag.commits.len()))
@@ -142,7 +159,7 @@ impl CenterLoom {
             Space::new().width(Length::Fill),
             if self.active_tab == CenterTab::YaxcheDag {
                 row![
-                    tooltip(
+                    mayan_tooltip(
                         button(text("−").size(12).color(MayaColors::STARLIGHT_WHITE))
                             .padding(Padding::from([2, 7]))
                             .style(|_theme, _status| button::Style {
@@ -155,12 +172,12 @@ impl CenterLoom {
                                 ..Default::default()
                             })
                             .on_press(CenterLoomMessage::ZoomOut.into()),
-                        text("Zoom out commit DAG").size(11),
-                        tooltip::Position::Bottom,
+                        "Zoom out commit DAG",
+                        iced::widget::tooltip::Position::Bottom,
                     ),
                     container(text(format!("{:.0}%", self.dag.zoom * 100.0)).size(10).color(MayaColors::SOLAR_GOLD))
                         .padding(Padding::from([2, 6])),
-                    tooltip(
+                    mayan_tooltip(
                         button(text("+").size(12).color(MayaColors::STARLIGHT_WHITE))
                             .padding(Padding::from([2, 7]))
                             .style(|_theme, _status| button::Style {
@@ -173,11 +190,11 @@ impl CenterLoom {
                                 ..Default::default()
                             })
                             .on_press(CenterLoomMessage::ZoomIn.into()),
-                        text("Zoom in commit DAG").size(11),
-                        tooltip::Position::Bottom,
+                        "Zoom in commit DAG",
+                        iced::widget::tooltip::Position::Bottom,
                     ),
                     Space::new().width(6),
-                    tooltip(
+                    mayan_tooltip(
                         button(text("☀️ HEAD").size(10).color(MayaColors::SOLAR_AMBER))
                             .padding(Padding::from([3, 8]))
                             .style(|_theme, _status| button::Style {
@@ -190,8 +207,8 @@ impl CenterLoom {
                                 ..Default::default()
                             })
                             .on_press(CenterLoomMessage::ResetZoom.into()),
-                        text("Reset zoom and focus on active HEAD commit").size(11),
-                        tooltip::Position::Bottom,
+                        "Reset zoom and focus on active HEAD commit",
+                        iced::widget::tooltip::Position::Bottom,
                     ),
                 ]
                 .align_y(Alignment::Center)
@@ -238,6 +255,11 @@ impl CenterLoom {
                     .view()
                     .map(|msg| CenterLoomMessage::Diff(msg).into())
             }
+            CenterTab::KatunEditor => {
+                self.katun_editor
+                    .view()
+                    .map(|msg| CenterLoomMessage::Editor(msg).into())
+            }
             CenterTab::AhauBlame => {
                 self.ahau_blame
                     .view()
@@ -273,6 +295,11 @@ impl CenterLoom {
                     .view()
                     .map(|msg| CenterLoomMessage::Portal(msg).into())
             }
+            CenterTab::CelestialWorkflows => {
+                self.celestial_workflows
+                    .view()
+                    .map(|msg| CenterLoomMessage::Workflows(msg).into())
+            }
             CenterTab::OracleRadar => {
                 self.oracle_radar
                     .view()
@@ -284,7 +311,7 @@ impl CenterLoom {
             .width(Length::Fill)
             .height(Length::Fill)
             .style(|_theme| container::Style {
-                background: Some(Color { a: 0.50, ..MayaColors::OBSIDIAN_BASE }.into()),
+                background: Some(Color { a: 0.92, ..MayaColors::OBSIDIAN_BASE }.into()),
                 border: Border {
                     color: MayaColors::OBSIDIAN_BORDER,
                     width: 0.0,
@@ -349,7 +376,7 @@ impl CenterLoom {
                 row![]
             },
             Space::new().width(12),
-            tooltip(
+            mayan_tooltip(
                 button(text("✕").size(10).color(MayaColors::PARCHMENT_MUTED))
                     .padding(Padding::from([1, 6]))
                     .style(|_, status| {
@@ -365,8 +392,8 @@ impl CenterLoom {
                         }
                     })
                     .on_press(CenterLoomMessage::CloseCommitDetails.into()),
-                text("Collapse commit inspector").size(11),
-                tooltip::Position::Top,
+                "Collapse commit inspector",
+                Position::Top,
             ),
         ]
         .padding(Padding::from([4, 10]))
@@ -409,6 +436,37 @@ impl CenterLoom {
                     .size(9)
                     .color(MayaColors::GLYPH_DIM)
             );
+            lineage_col = lineage_col.push(Space::new().height(4));
+
+            let c_sha = c.sha.clone();
+            lineage_col = lineage_col.push(
+                mayan_tooltip(
+                    button(
+                        row![
+                            text("✏️").size(9),
+                            Space::new().width(4),
+                            text("Amend Inscription").size(9).color(MayaColors::SOLAR_AMBER),
+                        ]
+                        .align_y(Alignment::Center)
+                    )
+                    .padding(Padding::from([3, 6]))
+                    .style(|_, status| {
+                        let border_color = match status {
+                            button::Status::Hovered => MayaColors::SOLAR_GOLD,
+                            _ => MayaColors::OBSIDIAN_BORDER,
+                        };
+                        button::Style {
+                            background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
+                            border: Border { color: border_color, width: 0.8, radius: 2.0.into() },
+                            ..Default::default()
+                        }
+                    })
+                    .on_press(CenterLoomMessage::AmendCommit(c_sha).into()),
+                    "Load this commit into the Inscription Chamber to amend its message and contents (git commit --amend)",
+                    iced::widget::tooltip::Position::Top,
+                )
+            );
+
             lineage_col = lineage_col.push(Space::new().height(4));
             lineage_col = lineage_col.push(
                 text("Parent Inscriptions:").size(9).color(MayaColors::SOLAR_AMBER)
@@ -530,7 +588,7 @@ impl CenterLoom {
                         Space::new().width(2),
                         text(format!("-{}", f.deletions)).size(8).color(MayaColors::CINNABAR_BRIGHT),
                         Space::new().width(6),
-                        tooltip(
+                        mayan_tooltip(
                             button(text("DIFF ➔").size(8).color(MayaColors::SOLAR_GOLD))
                                 .padding(Padding::from([1, 5]))
                                 .style(|_, status| {
@@ -545,8 +603,8 @@ impl CenterLoom {
                                     }
                                 })
                                 .on_press(CenterLoomMessage::OpenFileInDiff(path_clone).into()),
-                            text("Inspect file diff in Etz'nab' Stone Diff (git diff)").size(10),
-                            tooltip::Position::Top,
+                            "Inspect file diff in Etz'nab' Stone Diff (git diff)",
+                            Position::Top,
                         ),
                     ]
                     .padding(Padding::from([2, 4]))
@@ -648,6 +706,7 @@ impl CenterLoom {
         let tooltip_desc = match tab {
             CenterTab::YaxcheDag => "Visual commit DAG graph with branch lanes & merge ribbons (git log --graph --all)",
             CenterTab::StoneDiff => "Interactive intraline diff viewer with hunk-level staging (git diff)",
+            CenterTab::KatunEditor => "The K'atun Code Editor: Built-in code editor with syntax highlighting and instant Git staging",
             CenterTab::AhauBlame => "The Ahau Lineage: Line-by-line file blame and age heatmap (git blame)",
             CenterTab::PopolVuhLog => "The Popol Vuh Chronicle: Advanced search & commit history (git log --grep)",
             CenterTab::RebaseCrucible => "Interactive timeline rebase sequencer & 3-way conflict resolver (git rebase -i / git merge)",
@@ -655,6 +714,7 @@ impl CenterLoom {
             CenterTab::XibalbaReflog => "The Xibalba Mirror: Visual reflog timeline & reset dials (git reflog / reset)",
             CenterTab::ChacPurifier => "The Chac Purifier: Untracked file cleaner & multi-stash vault (git clean / stash)",
             CenterTab::OverseerPortals => "The Overseer Portals: Remote sync, force-with-lease push & prune (git push / fetch)",
+            CenterTab::CelestialWorkflows => "Celestial Workflows: Live GitHub Actions CI/CD run monitor and dispatch portal",
             CenterTab::OracleRadar => "Repository health radar: DORA velocity metrics, lead time, and team analytics",
         };
 
@@ -690,6 +750,6 @@ impl CenterLoom {
             })
             .on_press(CenterLoomMessage::SelectTab(tab).into());
 
-        tooltip(btn, text(tooltip_desc).size(11), tooltip::Position::Bottom).into()
+        mayan_tooltip(btn, tooltip_desc, iced::widget::tooltip::Position::Bottom)
     }
 }

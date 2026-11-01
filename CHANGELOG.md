@@ -10,6 +10,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0] - 2026-11-01
 
 ### Added
+- **Built-in K'atun Code Editor (`ui/code_editor.rs`):**
+  - In-app text editor with syntax highlighting, line numbers, and modification state tracking.
+  - Dedicated "Save (`Ctrl+S`)" and "Save & Consecrate (Save & Stage `git add`)" actions for instant micro-edits.
+- **Workspace Relics File Explorer (`ui/left_codex.rs`):**
+  - Working tree file browser embedded in the Left Codex with file-type glyphs and click-to-edit integration.
+  - Instant toggle between Git Glyphs (Branches/Tags/Stashes) and Workspace Relics (Files).
+- **Sacred Commit Amendment Rituals (`git commit --amend`):**
+  - Interactive "Amend HEAD Inscription" toggle in the Altar of Creation pre-populating summary and body.
+  - "Amend Kin" button in the Commit DAG and Popol Vuh Chronicle to reword or restage past commits.
+  - Post-commit follow-up banner with one-click "Push Consecrated Commits to Remote Horizon".
+- **Sanctuary Git Credentials Modal (`ui/git_credentials.rs`):**
+  - Local repository Git configuration editor (`user.name`, `user.email`, `remote.origin.url`) writing directly to `.git/config`.
+- **Celestial Workflows Altar (`ui/workflow_runs.rs`):**
+  - Live GitHub Actions CI/CD pipeline viewer powered by GitHub CLI (`gh run list`).
+  - Color-coded conclusion status badges (`Success`, `Failure`, `In Progress`, `Cancelled`), event triggers, and commit SHA links.
+  - One-click GitHub workflow run URL launcher and optional `winget` installation prompt if `gh` CLI is absent.
+- **Top Menu Navigation & Synchronous Git Rites:**
+  - `📂 Open Sanctuary`: Native OS folder picker (`rfd::FileDialog`) to open any Git repository.
+  - `⬇️ Pull`: Instant `git pull --rebase` against upstream branch.
+  - `⬆️ Push`: Immediate `git push origin` for local branches.
+  - `⚙️ Identity`: Local Git credentials inspector and editor.
+- **100% Solid Opaque Mayan Tooltips (`ui/tooltip.rs`):**
+  - Replaced translucent default tooltips with obsidian-void backdrops and solar-gold borders for high readability against dynamic canvases.
+- **Enhanced UI Contrast & Opacity:**
+  - Elevated panel base opacity across all chambers to ~0.94, guaranteeing sharp text and control contrast while subtly revealing cosmic video motion.
+- **Installer Non-Blocking Video Window:**
+  - Repositioned `video_player.ps1` to the top-right screen corner (`460x260`), leaving the Inno Setup directory selection wizard completely unobstructed.
+  - Added optional GitHub CLI (`gh`) winget installation task to the installer wizard.
+
 - **Dual-Project Sovereign Architecture:**
   - **Itzamná Desktop Studio (`itzamna-desktop`):** Built with Rust 2024 and Iced 0.13, delivering hardware-accelerated GPU graphics, responsive layout widgets, and deep `git2` integration.
   - **Ixchel Oracle Daemon (`ixchel`):** Built with Scala 3.3, ZIO 2, and ZIO HTTP, exposing high-performance reactive REST telemetry and DORA analytics on port 9090.

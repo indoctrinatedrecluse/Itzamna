@@ -45,6 +45,8 @@ impl Default for CommandPalette {
 impl CommandPalette {
     pub fn new() -> Self {
         let all_commands = vec![
+            PaletteCommand { id: "tab_editor", title: "Katun Code Editor (Inscribe & Edit Relics)", glyph: "✍️", category: "Chambers", shortcut: "Ctrl+E" },
+            PaletteCommand { id: "tab_workflows", title: "Celestial Workflows (GitHub Actions via gh CLI)", glyph: "🚀", category: "Chambers", shortcut: "Ctrl+W" },
             PaletteCommand { id: "tab_dag", title: "Tree of Life (Yaxché Commit DAG)", glyph: "🌳", category: "Chambers", shortcut: "Ctrl+1" },
             PaletteCommand { id: "tab_diff", title: "Altar of Creation (Surgical Diff & Hunk Staging)", glyph: "🔪", category: "Chambers", shortcut: "Ctrl+2" },
             PaletteCommand { id: "tab_rebase", title: "K'uk'ulkan Crucible (Visual Interactive Rebase)", glyph: "🔄", category: "Chambers", shortcut: "Ctrl+3" },
@@ -56,6 +58,10 @@ impl CommandPalette {
             PaletteCommand { id: "tab_clean", title: "The Chac Purifier (git clean & Multi-Stash Vault)", glyph: "🌧️", category: "Chambers", shortcut: "Ctrl+9" },
             PaletteCommand { id: "tab_remote", title: "The Overseer Portals (git remote push/pull/prune)", glyph: "🌐", category: "Chambers", shortcut: "Ctrl+0" },
             PaletteCommand { id: "tab_oracle", title: "Ixchel Oracle Radar (DORA Telemetry & Conduit)", glyph: "🔮", category: "Chambers", shortcut: "Ctrl+I" },
+            PaletteCommand { id: "action_open_folder", title: "Open Project Sanctuary (Folder Picker)", glyph: "📂", category: "Sanctuary", shortcut: "Ctrl+O" },
+            PaletteCommand { id: "action_pull", title: "Pull & Rebase from Remote Horizon (git pull --rebase)", glyph: "⬇️", category: "Sync", shortcut: "" },
+            PaletteCommand { id: "action_push", title: "Push Commits to Remote Horizon (git push origin)", glyph: "⬆️", category: "Sync", shortcut: "" },
+            PaletteCommand { id: "action_credentials", title: "Local Git Identity & Remote Origins (.git/config)", glyph: "⚙️", category: "Sanctuary", shortcut: "" },
             PaletteCommand { id: "action_sync", title: "Trigger Ixchel DORA & Velocity Sync Ritual", glyph: "⚡", category: "Rituals", shortcut: "" },
             PaletteCommand { id: "action_branch", title: "Sprout New Branch (git branch)", glyph: "🌱", category: "Rituals", shortcut: "" },
             PaletteCommand { id: "action_tag", title: "Inscribe Solar Tag Seal (git tag)", glyph: "🏷️", category: "Rituals", shortcut: "" },
@@ -214,11 +220,15 @@ impl CommandPalette {
     fn view_help_modal<'a, Message: 'a + From<PaletteMessage> + Clone>(&'a self) -> Element<'a, Message> {
         let shortcuts = vec![
             ("Ctrl + P / Ctrl + K", "Open Command Palette (All chambers & rituals)"),
+            ("Ctrl + O", "Open Project Sanctuary (Folder Picker)"),
+            ("Ctrl + E", "Katun Code Editor (Inscribe & Edit Relics)"),
+            ("Ctrl + S", "Save Active Relic in Editor"),
+            ("Ctrl + W", "Celestial Workflows (GitHub Actions via gh)"),
             ("F1 / ?", "Show / Hide this Sacred Keymap Altar"),
             ("Ctrl + 1 .. 9", "Instant jump to Workbench Tabs 1 through 9"),
             ("Ctrl + 0", "Jump to Overseer Portals (Remotes)"),
             ("Ctrl + I", "Jump to Ixchel Oracle Radar"),
-            ("Ctrl + B", "Toggle Left Codex (Branches/Stashes) sidebar"),
+            ("Ctrl + B", "Toggle Left Codex (Branches/Files) sidebar"),
             ("Ctrl + L", "Cycle Loom Canvas mode (Video / Procedural / Stealth)"),
             ("J / K / Down / Up", "Navigate commits in DAG or files in Staging"),
             ("Space", "Stage or unstage currently selected file"),

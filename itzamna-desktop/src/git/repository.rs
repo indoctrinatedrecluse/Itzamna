@@ -355,6 +355,117 @@ impl GitSanctuary {
         Ok(commit_oid.to_string())
     }
 
+    pub fn amend_commit(&self, summary: &str, description: &str) -> Result<String, String> {
+        let head = self.repo.head().map_err(|e| e.to_string())?;
+        let commit = head.peel_to_commit().map_err(|e| e.to_string())?;
+
+        let mut index = self.repo.index().map_err(|e| e.to_string())?;
+        let tree_oid = index.write_tree().map_err(|e| e.to_string())?;
+        let tree = self.repo.find_tree(tree_oid).map_err(|e| e.to_string())?;
+
+        let sig = self
+            .repo
+            .signature()
+            .unwrap_or_else(|_| Signature::now("indoctrinatedrecluse", "recluse@itzamna.dev").unwrap());
+
+        let full_msg = if description.is_empty() {
+            summary.to_string()
+        } else {
+            format!("{}\n\n{}", summary, description)
+        };
+
+        let new_oid = commit
+            .amend(
+                Some("HEAD"),
+                Some(&sig),
+                Some(&sig),
+                None,
+                Some(&full_msg),
+                Some(&tree),
+            )
+            .map_err(|e| e.to_string())?;
+
+        Ok(new_oid.to_string())
+    }
+
+    pub fn get_local_credentials(&self) -> (String, String, String) {
+        let config = self.repo.config().ok();
+        let name = config.as_ref().and_then(|c| c.get_string("user.name").ok()).unwrap_or_default();
+        let email = config.as_ref().and_then(|c| c.get_string("user.email").ok()).unwrap_or_default();
+        let remote_url = self.repo.find_remote("origin").ok().and_then(|r| r.url().map(|s| s.to_string())).unwrap_or_default();
+        (name, email, remote_url)
+    }
+
+    pub fn set_local_credentials(&self, name: &str, email: &str, remote_url: &str) -> Result<(), String> {
+        let mut config = self.repo.config().map_err(|e| e.to_string())?;
+        config.set_str("user.name", name).map_err(|e| e.to_string())?;
+        config.set_str("user.email", email).map_err(|e| e.to_string())?;
+
+        if !remote_url.is_empty() {
+            if self.repo.find_remote("origin").is_ok() {
+                self.repo.remote_set_url("origin", remote_url).map_err(|e| e.to_string())?;
+            } else {
+                self.repo.remote("origin", remote_url).map_err(|e| e.to_string())?;
+            }
+        }
+        Ok(())
+    }
+
+    pub fn push_origin(&self, branch_name: &str) -> Result<String, String> {
+        let branch = if branch_name.is_empty() || branch_name == "detached HEAD" {
+            "HEAD"
+        } else {
+            branch_name
+        };
+        let output = std::process::Command::new("git")
+            .current_dir(self.repo.workdir().unwrap_or(std::path::Path::new(".")))
+            .args(["push", "origin", branch])
+            .output()
+            .map_err(|e| e.to_string())?;
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+            Ok(if !stdout.is_empty() { stdout } else if !stderr.is_empty() { stderr } else { "Pushed cleanly to origin".into() })
+        } else {
+            Err(String::from_utf8_lossy(&output.stderr).to_string())
+        }
+    }
+
+    pub fn pull_rebase(&self, branch_name: &str) -> Result<String, String> {
+        let branch = if branch_name.is_empty() || branch_name == "detached HEAD" {
+            "main"
+        } else {
+            branch_name
+        };
+        let output = std::process::Command::new("git")
+            .current_dir(self.repo.workdir().unwrap_or(std::path::Path::new(".")))
+            .args(["pull", "--rebase", "origin", branch])
+            .output()
+            .map_err(|e| e.to_string())?;
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+            Ok(if !stdout.is_empty() { stdout } else if !stderr.is_empty() { stderr } else { "Pulled and rebased cleanly from origin".into() })
+        } else {
+            Err(String::from_utf8_lossy(&output.stderr).to_string())
+        }
+    }
+
+    pub fn fetch_prune(&self) -> Result<String, String> {
+        let output = std::process::Command::new("git")
+            .current_dir(self.repo.workdir().unwrap_or(std::path::Path::new(".")))
+            .args(["fetch", "--prune"])
+            .output()
+            .map_err(|e| e.to_string())?;
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+            Ok(if !stdout.is_empty() { stdout } else if !stderr.is_empty() { stderr } else { "Fetched and pruned remote tracking refs".into() })
+        } else {
+            Err(String::from_utf8_lossy(&output.stderr).to_string())
+        }
+    }
+
     // --- REAL BRANCH OPERATIONS ---
 
     pub fn switch_branch(&self, branch_name: &str) -> Result<(), String> {
@@ -385,6 +496,40 @@ impl GitSanctuary {
             .branch(branch_name, &commit, false)
             .map_err(|e| e.to_string())?;
         Ok(())
+    }
+
+    pub fn list_workspace_files(&self) -> Vec<String> {
+        let mut files = Vec::new();
+        let workdir = match self.repo.workdir() {
+            Some(w) => w,
+            None => return files,
+        };
+
+        fn scan_dir(dir: &std::path::Path, base: &std::path::Path, out: &mut Vec<String>, depth: usize) {
+            if depth > 4 || out.len() > 300 {
+                return;
+            }
+            if let Ok(entries) = std::fs::read_dir(dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    if name.starts_with('.') || name == "target" || name == "node_modules" {
+                        continue;
+                    }
+                    if path.is_file() {
+                        if let Ok(rel) = path.strip_prefix(base) {
+                            out.push(rel.to_string_lossy().replace('\\', "/"));
+                        }
+                    } else if path.is_dir() {
+                        scan_dir(&path, base, out, depth + 1);
+                    }
+                }
+            }
+        }
+
+        scan_dir(workdir, workdir, &mut files, 0);
+        files.sort();
+        files
     }
 
     pub fn create_tag(&self, tag_name: &str) -> Result<(), String> {

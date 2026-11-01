@@ -51,6 +51,7 @@ ButtonInstall=&Awaken
 
 [Tasks]
 Name: "desktopicon"; Description: "Inscribe sacred desktop glyph (Create Desktop Shortcut)"; GroupDescription: "Celestial Blessings:"; Flags: checkedonce
+Name: "installgh"; Description: "Install GitHub CLI (gh) via winget (enables Celestial Workflows)"; GroupDescription: "Optional Offerings:"; Flags: unchecked
 
 [Files]
 ; Live video player assets extracted to temp for real-time video playback during install
@@ -68,7 +69,8 @@ Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppFullName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\assets\icon.ico"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "☀️ Enter the Sanctuary (Launch Itzamná Git Studio)"; Flags: nowait postinstall skipifsilent
+Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -Command ""winget install --id GitHub.cli -e --source winget --accept-package-agreements --accept-source-agreements"""; Description: "Install GitHub CLI via winget"; Flags: runhidden; Tasks: installgh
+Filename: "{app}\{#MyAppExeName}"; Description: "☀️ Enter the Sanctuary (Launch Itzamná Git Studio)"; Flags: nowait postinstall skipifsilent checkedonce
 
 [Code]
 function GetCurrentProcessId: DWORD;
