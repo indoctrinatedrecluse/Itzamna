@@ -44,7 +44,7 @@ jobs:
           name: itzamna-windows-x86_64
           path: |
             dist/itzamna-windows-x86_64.zip
-            dist/ItzamnaSetup-v0.1.0.exe
+            dist/ItzamnaSetup-*.exe
 
   build-linux:
     name: Build Linux Binary
@@ -117,7 +117,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/itzamna-windows-x86_64/ItzamnaSetup-v0.1.0.exe
+            artifacts/itzamna-windows-x86_64/ItzamnaSetup-*.exe
             artifacts/itzamna-windows-x86_64/itzamna-windows-x86_64.zip
             artifacts/itzamna-linux-x86_64/itzamna-linux-x86_64.tar.gz
             artifacts/itzamna-macos-universal/itzamna-macos-universal.tar.gz

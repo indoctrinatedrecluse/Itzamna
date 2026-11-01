@@ -70,7 +70,7 @@ Name: "{autodesktop}\{#MyAppFullName}"; Filename: "{app}\{#MyAppExeName}"; IconF
 
 [Run]
 Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -Command ""winget install --id GitHub.cli -e --source winget --accept-package-agreements --accept-source-agreements"""; Description: "Install GitHub CLI via winget"; Flags: runhidden; Tasks: installgh
-Filename: "{app}\{#MyAppExeName}"; Description: "☀️ Enter the Sanctuary (Launch Itzamná Git Studio)"; Flags: nowait postinstall skipifsilent checkedonce
+Filename: "{app}\{#MyAppExeName}"; Description: "☀️ Enter the Sanctuary (Launch Itzamná Git Studio)"; Flags: nowait postinstall skipifsilent
 
 [Code]
 function GetCurrentProcessId: DWORD;
