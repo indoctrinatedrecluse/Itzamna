@@ -56,6 +56,7 @@ pub enum CenterLoomMessage {
     ZoomOut,
     ResetZoom,
     OpenFileInDiff(String),
+    OpenCommitFileInDiff { sha: String, path: String },
     OpenFileInEditor(String),
     SelectParent(String),
     CloseCommitDetails,
@@ -570,6 +571,7 @@ impl CenterLoom {
                     };
 
                     let path_clone = f.path.clone();
+                    let sha_clone = c.sha.clone();
                     let f_row = row![
                         container(text(f.status).size(8).color(status_color))
                             .padding(Padding::from([1, 4]))
@@ -588,36 +590,40 @@ impl CenterLoom {
                         Space::new().width(2),
                         text(format!("-{}", f.deletions)).size(8).color(MayaColors::CINNABAR_BRIGHT),
                         Space::new().width(6),
-                        mayan_tooltip(
-                            button(text("DIFF ➔").size(8).color(MayaColors::SOLAR_GOLD))
-                                .padding(Padding::from([1, 5]))
-                                .style(|_, status| {
-                                    let border_color = match status {
-                                        button::Status::Hovered => MayaColors::SOLAR_GOLD,
-                                        _ => MayaColors::OBSIDIAN_BORDER,
-                                    };
-                                    button::Style {
-                                        background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
-                                        border: Border { color: border_color, width: 0.8, radius: 2.0.into() },
-                                        ..Default::default()
-                                    }
-                                })
-                                .on_press(CenterLoomMessage::OpenFileInDiff(path_clone).into()),
-                            "Inspect file diff in Etz'nab' Stone Diff (git diff)",
-                            Position::Top,
-                        ),
+                        container(text("DIFF ➔").size(8).color(MayaColors::SOLAR_GOLD))
+                            .padding(Padding::from([1, 4])),
                     ]
-                    .padding(Padding::from([2, 4]))
+                    .padding(Padding::from([3, 6]))
                     .align_y(Alignment::Center);
 
-                    files_column = files_column.push(
-                        container(f_row)
-                            .width(Length::Fill)
-                            .style(|_| container::Style {
-                                background: Some(Color { a: 0.2, ..MayaColors::OBSIDIAN_SURFACE }.into()),
-                                border: Border { radius: 2.0.into(), ..Default::default() },
+                    let file_btn = button(f_row)
+                        .width(Length::Fill)
+                        .padding(0)
+                        .style(|_, status| {
+                            let (bg, border_color) = match status {
+                                button::Status::Hovered => (
+                                    Color { a: 0.35, ..MayaColors::OBSIDIAN_SURFACE },
+                                    MayaColors::SOLAR_GOLD,
+                                ),
+                                _ => (
+                                    Color { a: 0.15, ..MayaColors::OBSIDIAN_SURFACE },
+                                    MayaColors::OBSIDIAN_BORDER,
+                                ),
+                            };
+                            button::Style {
+                                background: Some(bg.into()),
+                                border: Border { color: border_color, width: 0.8, radius: 2.0.into() },
                                 ..Default::default()
-                            })
+                            }
+                        })
+                        .on_press(CenterLoomMessage::OpenCommitFileInDiff { sha: sha_clone, path: path_clone }.into());
+
+                    files_column = files_column.push(
+                        mayan_tooltip(
+                            file_btn,
+                            "Click to inspect intra-line stone diff for this relic",
+                            Position::Top,
+                        )
                     );
                 }
             }

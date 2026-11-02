@@ -260,7 +260,11 @@ impl BottomProphecy {
                 Space::new().width(6),
                 text(entry.glyph).size(10),
                 Space::new().width(6),
-                text(&entry.message).size(10).color(color).width(Length::Fill),
+                text(&entry.message)
+                    .size(10)
+                    .color(color)
+                    .width(Length::Fill)
+                    .wrapping(text::Wrapping::Word),
             ]
             .padding(Padding::from([2, 4]))
             .align_y(Alignment::Center);

@@ -71,6 +71,23 @@ impl DetailedCommit {
                     total_deletions = stats.deletions();
                 }
 
+                let mut file_line_counts: std::collections::HashMap<String, (usize, usize)> = std::collections::HashMap::new();
+                let _ = diff.print(git2::DiffFormat::Patch, |delta, _hunk, line| {
+                    let path = delta
+                        .new_file()
+                        .path()
+                        .or_else(|| delta.old_file().path())
+                        .map(|p| p.to_string_lossy().to_string())
+                        .unwrap_or_default();
+                    let entry = file_line_counts.entry(path).or_insert((0, 0));
+                    match line.origin() {
+                        '+' => entry.0 += 1,
+                        '-' => entry.1 += 1,
+                        _ => {}
+                    }
+                    true
+                });
+
                 for delta in diff.deltas() {
                     let path = delta
                         .new_file()
@@ -88,11 +105,13 @@ impl DetailedCommit {
                         _ => "M",
                     };
 
+                    let (additions, deletions) = file_line_counts.get(&path).copied().unwrap_or((0, 0));
+
                     changed_files.push(CommitFileChange {
                         path,
                         status,
-                        additions: 0,
-                        deletions: 0,
+                        additions,
+                        deletions,
                     });
                 }
             }
@@ -113,6 +132,27 @@ impl DetailedCommit {
             changed_files,
             total_additions,
             total_deletions,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_detailed_commit_from_real_repo() {
+        if let Ok(repo) = git2::Repository::discover(".") {
+            if let Ok(head) = repo.head().and_then(|h| h.peel_to_commit()) {
+                let detailed = DetailedCommit::from_git2_commit(&repo, &head);
+                assert!(!detailed.sha.is_empty());
+                assert_eq!(detailed.short_sha.len(), 7);
+                assert!(!detailed.summary.is_empty());
+                println!("Inspected commit: {} (files: {})", detailed.short_sha, detailed.changed_files.len());
+                for f in &detailed.changed_files {
+                    println!("  File {}: +{} -{}", f.path, f.additions, f.deletions);
+                }
+            }
         }
     }
 }

@@ -98,3 +98,35 @@ impl DiffEngine {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_compute_diff_additions_and_deletions() {
+        let old = "fn main() {\n    println!(\"Hello\");\n}";
+        let new = "fn main() {\n    println!(\"Awakened Itzamna\");\n    let x = 42;\n}";
+        let diff = DiffEngine::compute_diff(old, new, "src/main.rs");
+
+        assert_eq!(diff.old_path, "src/main.rs");
+        assert_eq!(diff.new_path, "src/main.rs");
+        assert!(!diff.hunks.is_empty(), "Hunks should be generated for differences");
+
+        let has_addition = diff.hunks.iter().any(|h| h.lines.iter().any(|l| l.tag == DiffLineTag::Addition));
+        let has_deletion = diff.hunks.iter().any(|h| h.lines.iter().any(|l| l.tag == DiffLineTag::Deletion));
+        assert!(has_addition, "Should contain addition line");
+        assert!(has_deletion, "Should contain deletion line");
+    }
+
+    #[test]
+    fn test_compute_diff_empty_to_new() {
+        let old = "";
+        let new = "const SACRED_KIN: u32 = 260;\n";
+        let diff = DiffEngine::compute_diff(old, new, "src/calendar.rs");
+
+        assert!(!diff.hunks.is_empty());
+        let all_additions = diff.hunks[0].lines.iter().all(|l| l.tag == DiffLineTag::Addition);
+        assert!(all_additions, "All lines should be additions when starting from empty");
+    }
+}

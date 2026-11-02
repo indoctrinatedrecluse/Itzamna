@@ -226,9 +226,15 @@ impl KatunEditor {
         .padding(Padding::from([4, 10]))
         .align_y(Alignment::Center);
 
+        let syntax = std::path::Path::new(path)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("rs");
+
         let editor_widget = text_editor(&self.content)
             .placeholder("Inscribe your code hieroglyphs...")
             .padding(Padding::from(10))
+            .highlight(syntax, iced::highlighter::Theme::Base16Mocha)
             .on_action(|a| EditorMessage::Edit(a).into())
             .style(|_, _| text_editor::Style {
                 background: MayaColors::OBSIDIAN_VOID.into(),
@@ -238,18 +244,46 @@ impl KatunEditor {
                 selection: MayaColors::JADE_SHADOW,
             });
 
-        let status_bar: Element<'a, Message> = if let Some(ref st) = self.status_message {
-            container(text(st).size(9).color(MayaColors::JADE_GLOW))
-                .padding(Padding::from([2, 8]))
-                .width(Length::Fill)
-                .style(|_| container::Style {
-                    background: Some(Color { a: 0.95, ..MayaColors::OBSIDIAN_BASE }.into()),
-                    ..Default::default()
-                })
-                .into()
+        let cursor = self.content.cursor();
+        let cursor_line = cursor.position.line;
+        let cursor_col = cursor.position.column;
+        let line_count = self.content.line_count();
+
+        let status_left = if let Some(ref st) = self.status_message {
+            text(st).size(9).color(MayaColors::JADE_GLOW)
         } else {
-            Space::new().height(0).into()
+            text("Sacred codex ready for scribing.").size(9).color(MayaColors::GLYPH_DIM)
         };
+
+        let status_bar = container(
+            row![
+                status_left,
+                Space::new().width(Length::Fill),
+                container(text(format!("[{}]", syntax.to_uppercase())).size(8).color(MayaColors::SOLAR_GOLD))
+                    .padding(Padding::from([1, 4]))
+                    .style(|_| container::Style {
+                        background: Some(Color { a: 0.25, ..MayaColors::SOLAR_AMBER }.into()),
+                        border: Border { color: MayaColors::SOLAR_GOLD, width: 0.5, radius: 2.0.into() },
+                        ..Default::default()
+                    }),
+                Space::new().width(10),
+                text(format!("Ln {}, Col {}", cursor_line + 1, cursor_col + 1)).size(9).color(MayaColors::STARLIGHT_WHITE),
+                Space::new().width(10),
+                text(format!("{} lines", line_count)).size(9).color(MayaColors::PARCHMENT_MUTED),
+            ]
+            .padding(Padding::from([3, 10]))
+            .align_y(Alignment::Center)
+        )
+        .width(Length::Fill)
+        .style(|_| container::Style {
+            background: Some(Color { a: 0.95, ..MayaColors::OBSIDIAN_BASE }.into()),
+            border: Border {
+                color: MayaColors::OBSIDIAN_BORDER,
+                width: 1.0,
+                radius: 0.0.into(),
+            },
+            ..Default::default()
+        });
 
         container(column![header, editor_widget, status_bar])
             .width(Length::Fill)

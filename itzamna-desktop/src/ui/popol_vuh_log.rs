@@ -171,8 +171,12 @@ impl PopolVuhLogWorkbench {
             Space::new().width(6),
             tag_chips,
             Space::new().width(8),
-            text(&commit.summary).size(11).color(MayaColors::STARLIGHT_WHITE),
-            Space::new().width(Length::Fill),
+            text(&commit.summary)
+                .size(11)
+                .color(MayaColors::STARLIGHT_WHITE)
+                .wrapping(text::Wrapping::Word)
+                .width(Length::Fill),
+            Space::new().width(8),
             text(&commit.author_name).size(10).color(MayaColors::JADE_GLOW),
             Space::new().width(6),
             text(&commit.relative_time).size(9).color(MayaColors::GLYPH_DIM),

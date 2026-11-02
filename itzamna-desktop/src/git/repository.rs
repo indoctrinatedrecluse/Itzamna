@@ -892,4 +892,89 @@ impl GitSanctuary {
         let repo = Repository::init(target_path).map_err(|e| e.to_string())?;
         Ok(Self { repo })
     }
+
+    /// Retrieve the historical (old, new) text contents for a specific file within a given commit
+    pub fn get_commit_file_diff(&self, short_or_full_sha: &str, file_path: &str) -> (String, String) {
+        let commit = if short_or_full_sha.len() == 40 {
+            self.repo.find_commit(Oid::from_str(short_or_full_sha).unwrap_or(Oid::zero())).ok()
+        } else {
+            let mut found = None;
+            if let Ok(mut revwalk) = self.repo.revwalk() {
+                let _ = revwalk.push_head();
+                for id in revwalk.flatten() {
+                    if id.to_string().starts_with(short_or_full_sha) {
+                        found = Some(id);
+                        break;
+                    }
+                }
+            }
+            found.and_then(|id| self.repo.find_commit(id).ok())
+        };
+
+        let target_commit = match commit {
+            Some(c) => c,
+            None => return (String::new(), String::new()),
+        };
+
+        let target_tree = match target_commit.tree() {
+            Ok(t) => t,
+            Err(_) => return (String::new(), String::new()),
+        };
+
+        let new_text = target_tree
+            .get_path(Path::new(file_path))
+            .ok()
+            .and_then(|entry| entry.to_object(&self.repo).ok())
+            .and_then(|obj| obj.into_blob().ok())
+            .and_then(|blob| std::str::from_utf8(blob.content()).ok().map(|s| s.to_string()))
+            .unwrap_or_default();
+
+        let old_text = if target_commit.parent_count() > 0 {
+            target_commit
+                .parent(0)
+                .ok()
+                .and_then(|p| p.tree().ok())
+                .and_then(|ptree| ptree.get_path(Path::new(file_path)).ok())
+                .and_then(|entry| entry.to_object(&self.repo).ok())
+                .and_then(|obj| obj.into_blob().ok())
+                .and_then(|blob| std::str::from_utf8(blob.content()).ok().map(|s| s.to_string()))
+                .unwrap_or_default()
+        } else {
+            String::new()
+        };
+
+        (old_text, new_text)
+    }
+
+    /// Retrieve (old, new) text contents for a working directory or staged file
+    pub fn get_working_file_diff(&self, file_path: &str, is_staged: bool) -> (String, String) {
+        let head_commit = self.repo.head().ok().and_then(|h| h.peel_to_commit().ok());
+        let head_text = head_commit
+            .and_then(|c| c.tree().ok())
+            .and_then(|t| t.get_path(Path::new(file_path)).ok())
+            .and_then(|entry| entry.to_object(&self.repo).ok())
+            .and_then(|obj| obj.into_blob().ok())
+            .and_then(|blob| std::str::from_utf8(blob.content()).ok().map(|s| s.to_string()))
+            .unwrap_or_default();
+
+        let index_text = self
+            .repo
+            .index()
+            .ok()
+            .and_then(|idx| idx.get_path(Path::new(file_path), 0).map(|e| e.id))
+            .and_then(|oid| self.repo.find_blob(oid).ok())
+            .and_then(|blob| std::str::from_utf8(blob.content()).ok().map(|s| s.to_string()));
+
+        let workdir = self.repo.workdir().map(|w| w.to_path_buf()).unwrap_or_else(|| std::path::PathBuf::from("."));
+        let full_path = workdir.join(file_path);
+        let worktree_text = std::fs::read_to_string(&full_path).unwrap_or_default();
+
+        if is_staged {
+            let current_index = index_text.unwrap_or_default();
+            (head_text, current_index)
+        } else {
+            let base_text = index_text.unwrap_or(head_text);
+            (base_text, worktree_text)
+        }
+    }
 }

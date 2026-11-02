@@ -27,7 +27,7 @@ pub use center_loom::{CenterLoom, CenterLoomMessage, CenterTab};
 pub use chac_purifier::{ChacPurifierWorkbench, PurifierMessage};
 pub use code_editor::{EditorMessage, KatunEditor};
 pub use command_palette::{CommandPalette, PaletteCommand, PaletteMessage};
-pub use diff_workbench::{DiffMessage, DiffWorkbench};
+pub use diff_workbench::{DiffFileHeader, DiffMessage, DiffWorkbench};
 pub use git_credentials::{CredentialsMessage, CredentialsModal};
 pub use glyph_ribbon::GlyphRibbon;
 pub use kukulcan_merge::{KukulcanMergeWorkbench, MergeMessage};

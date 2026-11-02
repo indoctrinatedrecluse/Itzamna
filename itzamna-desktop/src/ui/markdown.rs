@@ -98,7 +98,8 @@ impl MayanMarkdown {
         column![
             text(h1.to_string())
                 .size(15)
-                .color(MayaColors::SOLAR_GOLD),
+                .color(MayaColors::SOLAR_GOLD)
+                .wrapping(text::Wrapping::Word),
             container(Space::new())
                 .height(1)
                 .width(Length::Fill)
@@ -115,7 +116,8 @@ impl MayanMarkdown {
         column![
             text(h2.to_string())
                 .size(13)
-                .color(MayaColors::JADE_GLOW),
+                .color(MayaColors::JADE_GLOW)
+                .wrapping(text::Wrapping::Word),
             container(Space::new())
                 .height(1)
                 .width(Length::Fill)
@@ -132,6 +134,7 @@ impl MayanMarkdown {
         text(h3.to_string())
             .size(12)
             .color(MayaColors::MAYA_BLUE)
+            .wrapping(text::Wrapping::Word)
             .into()
     }
 
@@ -139,6 +142,7 @@ impl MayanMarkdown {
         text(h4.to_string())
             .size(11)
             .color(MayaColors::SOLAR_AMBER)
+            .wrapping(text::Wrapping::Word)
             .into()
     }
 
@@ -155,7 +159,8 @@ impl MayanMarkdown {
                 Space::new().width(8),
                 text(quote.to_string())
                     .size(10)
-                    .color(MayaColors::STARLIGHT_WHITE),
+                    .color(MayaColors::STARLIGHT_WHITE)
+                    .wrapping(text::Wrapping::Word),
             ]
             .align_y(Alignment::Center)
         )
@@ -187,7 +192,8 @@ impl MayanMarkdown {
             Space::new().width(6),
             text(item.to_string())
                 .size(10)
-                .color(MayaColors::STARLIGHT_WHITE),
+                .color(MayaColors::STARLIGHT_WHITE)
+                .wrapping(text::Wrapping::Word),
         ]
         .align_y(Alignment::Start)
         .into()
@@ -245,7 +251,10 @@ impl MayanMarkdown {
                     );
                 } else if !part.is_empty() {
                     row_content = row_content.push(
-                        text(part.to_string()).size(10).color(MayaColors::STARLIGHT_WHITE)
+                        text(part.to_string())
+                            .size(10)
+                            .color(MayaColors::STARLIGHT_WHITE)
+                            .wrapping(text::Wrapping::Word)
                     );
                 }
             }
@@ -254,6 +263,7 @@ impl MayanMarkdown {
             text(paragraph.to_string())
                 .size(10)
                 .color(MayaColors::STARLIGHT_WHITE)
+                .wrapping(text::Wrapping::Word)
                 .into()
         }
     }

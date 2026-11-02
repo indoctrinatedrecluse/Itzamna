@@ -12,7 +12,7 @@ use crate::git::{FileStatus, GitSanctuary};
 use crate::theme::MayaColors;
 use crate::ui::{
     BlameMessage, BottomProphecy, CelestialWorkflows, CenterLoom, CenterLoomMessage, CenterTab,
-    CommandPalette, CredentialsMessage, CredentialsModal, DiffMessage, EditorMessage, FileEntry,
+    CommandPalette, CredentialsMessage, CredentialsModal, DiffFileHeader, DiffMessage, EditorMessage, FileEntry,
     GlyphRibbon, LeftCodex, LeftCodexMessage, MenuCategory, MergeMessage, OracleMessage,
     PaletteMessage, PopolLogMessage, PortalMessage, ProphecyLevel, ProphecyMessage, PurifierMessage,
     RebaseMessage, ReflogMessage, ResetMode, RightAltar, RightAltarMessage, StatusBar, TopMenuBar,
@@ -707,9 +707,16 @@ impl ItzamnaApp {
                     Task::none()
                 }
                 LeftCodexMessage::OpenFileInEditor(path) => {
-                    let _ = self.center_loom.katun_editor.load_file(path.clone());
+                    let full_path = if std::path::Path::new(&path).is_absolute() {
+                        path.clone()
+                    } else if let Some(ref s) = self.sanctuary {
+                        std::path::Path::new(&s.repo_path()).join(&path).to_string_lossy().to_string()
+                    } else {
+                        path.clone()
+                    };
+                    let _ = self.center_loom.katun_editor.load_file(full_path.clone());
                     self.center_loom.active_tab = CenterTab::KatunEditor;
-                    self.bottom_prophecy.push("23:55:00", "📜", format!("Opened relic in Katun Code Editor: {}", path), ProphecyLevel::Jade);
+                    self.bottom_prophecy.push("23:55:00", "📜", format!("Opened relic in Katun Code Editor: {}", full_path), ProphecyLevel::Jade);
                     Task::none()
                 }
                 LeftCodexMessage::OpenFolderDialog => {
@@ -737,6 +744,31 @@ impl ItzamnaApp {
                     }
                 },
                 CenterLoomMessage::Diff(diff_msg) => match diff_msg {
+                    DiffMessage::SelectFile(path) => {
+                        if let Some(ref s) = self.sanctuary {
+                            let (old_text, new_text) = if let Some(ref sha) = self.center_loom.diff_workbench.commit_sha {
+                                s.get_commit_file_diff(sha, &path)
+                            } else {
+                                s.get_working_file_diff(&path, self.center_loom.diff_workbench.is_staged_context)
+                            };
+                            self.center_loom.diff_workbench.set_active_file(path.clone(), &old_text, &new_text);
+                            self.bottom_prophecy.push("23:55:00", "🔪", format!("Awakened diff stela for: {}", path), ProphecyLevel::Jade);
+                        }
+                        Task::none()
+                    }
+                    DiffMessage::OpenInEditor(path) => {
+                        let full_path = if std::path::Path::new(&path).is_absolute() {
+                            path.clone()
+                        } else if let Some(ref s) = self.sanctuary {
+                            std::path::Path::new(&s.repo_path()).join(&path).to_string_lossy().to_string()
+                        } else {
+                            path.clone()
+                        };
+                        let _ = self.center_loom.katun_editor.load_file(full_path.clone());
+                        self.center_loom.active_tab = CenterTab::KatunEditor;
+                        self.bottom_prophecy.push("23:55:00", "📜", format!("Inscribing relic in K'atun Code Editor: {}", full_path), ProphecyLevel::Jade);
+                        Task::none()
+                    }
                     DiffMessage::StageHunk(idx) => {
                         self.bottom_prophecy.push("23:55:00", "🔪", format!("Etz'nab' surgical stage: Hunk #{} consecrated to Altar", idx + 1), ProphecyLevel::Jade);
                         Task::none()
@@ -1109,9 +1141,71 @@ impl ItzamnaApp {
                     Task::none()
                 }
                 CenterLoomMessage::OpenFileInDiff(path) => {
-                    let old_text = std::fs::read_to_string(&path).unwrap_or_default();
-                    self.center_loom.diff_workbench.set_file(path, &old_text, &old_text);
-                    self.center_loom.active_tab = CenterTab::StoneDiff;
+                    if let Some(ref s) = self.sanctuary {
+                        let (old_text, new_text) = s.get_working_file_diff(&path, false);
+                        self.center_loom.diff_workbench.set_working_context(
+                            "Working Tree Alteration".to_string(),
+                            false,
+                            vec![DiffFileHeader {
+                                path: path.clone(),
+                                status: "M".to_string(),
+                                additions: 0,
+                                deletions: 0,
+                            }],
+                            path.clone(),
+                            &old_text,
+                            &new_text,
+                        );
+                        self.center_loom.active_tab = CenterTab::StoneDiff;
+                    }
+                    Task::none()
+                }
+                CenterLoomMessage::OpenCommitFileInDiff { sha, path } => {
+                    if let Some(ref s) = self.sanctuary {
+                        let detailed = s.find_detailed_commit(&sha);
+                        let files: Vec<DiffFileHeader> = if let Some(ref d) = detailed {
+                            d.changed_files
+                                .iter()
+                                .map(|f| DiffFileHeader {
+                                    path: f.path.clone(),
+                                    status: f.status.to_string(),
+                                    additions: f.additions,
+                                    deletions: f.deletions,
+                                })
+                                .collect()
+                        } else {
+                            vec![DiffFileHeader {
+                                path: path.clone(),
+                                status: "M".to_string(),
+                                additions: 0,
+                                deletions: 0,
+                            }]
+                        };
+
+                        let (old_text, new_text) = s.get_commit_file_diff(&sha, &path);
+                        let short_sha = sha[..sha.len().min(7)].to_string();
+                        let title = format!(
+                            "Commit [{}] — {}",
+                            short_sha,
+                            detailed.as_ref().map(|d| d.summary.as_str()).unwrap_or("Sacred Inscription")
+                        );
+
+                        self.center_loom.diff_workbench.set_commit_context(
+                            sha.clone(),
+                            title,
+                            files,
+                            path.clone(),
+                            &old_text,
+                            &new_text,
+                        );
+                        self.center_loom.active_tab = CenterTab::StoneDiff;
+                        self.bottom_prophecy.push(
+                            "23:55:00",
+                            "🔪",
+                            format!("Etz'nab' Diff revealed for {} in commit [{}]", path, short_sha),
+                            ProphecyLevel::Jade,
+                        );
+                    }
                     Task::none()
                 }
                 CenterLoomMessage::SelectParent(sha) => {
@@ -1137,6 +1231,14 @@ impl ItzamnaApp {
                                 self.refresh_git_state();
                                 self.bottom_prophecy.push("23:55:00", "✨", format!("Saved & offered to Altar: {}", p), ProphecyLevel::Jade);
                             }
+                        }
+                        Task::none()
+                    }
+                    EditorMessage::SaveFile => {
+                        let _ = self.center_loom.katun_editor.save();
+                        self.refresh_git_state();
+                        if let Some(p) = self.center_loom.katun_editor.file_path.clone() {
+                            self.bottom_prophecy.push("23:55:00", "💾", format!("Saved codex relic: {}", p), ProphecyLevel::Jade);
                         }
                         Task::none()
                     }
@@ -1179,9 +1281,16 @@ impl ItzamnaApp {
                     }
                 },
                 CenterLoomMessage::OpenFileInEditor(path) => {
-                    let _ = self.center_loom.katun_editor.load_file(path.clone());
+                    let full_path = if std::path::Path::new(&path).is_absolute() {
+                        path.clone()
+                    } else if let Some(ref s) = self.sanctuary {
+                        std::path::Path::new(&s.repo_path()).join(&path).to_string_lossy().to_string()
+                    } else {
+                        path.clone()
+                    };
+                    let _ = self.center_loom.katun_editor.load_file(full_path.clone());
                     self.center_loom.active_tab = CenterTab::KatunEditor;
-                    self.bottom_prophecy.push("23:55:00", "📜", format!("Opened relic in Katun Code Editor: {}", path), ProphecyLevel::Jade);
+                    self.bottom_prophecy.push("23:55:00", "📜", format!("Opened relic in Katun Code Editor: {}", full_path), ProphecyLevel::Jade);
                     Task::none()
                 }
                 CenterLoomMessage::AmendCommit(sha) => {
@@ -1204,9 +1313,46 @@ impl ItzamnaApp {
                     Task::none()
                 }
                 RightAltarMessage::OpenFileDiff(path) => {
-                    let old_text = std::fs::read_to_string(&path).unwrap_or_default();
-                    self.center_loom.diff_workbench.set_file(path, &old_text, &old_text);
-                    self.center_loom.active_tab = CenterTab::StoneDiff;
+                    if let Some(ref s) = self.sanctuary {
+                        let is_staged = self.right_altar.staged_files.iter().any(|f| f.path == path);
+                        let source = if is_staged {
+                            &self.right_altar.staged_files
+                        } else {
+                            &self.right_altar.unstaged_files
+                        };
+                        let files: Vec<DiffFileHeader> = source
+                            .iter()
+                            .map(|f| DiffFileHeader {
+                                path: f.path.clone(),
+                                status: f.status.to_string(),
+                                additions: 0,
+                                deletions: 0,
+                            })
+                            .collect();
+
+                        let (old_text, new_text) = s.get_working_file_diff(&path, is_staged);
+                        let title = if is_staged {
+                            "Staged Inscriptions (git diff --cached)".to_string()
+                        } else {
+                            "Unstaged Alterations (git diff)".to_string()
+                        };
+
+                        self.center_loom.diff_workbench.set_working_context(
+                            title,
+                            is_staged,
+                            files,
+                            path.clone(),
+                            &old_text,
+                            &new_text,
+                        );
+                        self.center_loom.active_tab = CenterTab::StoneDiff;
+                        self.bottom_prophecy.push(
+                            "23:55:00",
+                            "🔪",
+                            format!("Etz'nab' Stone Diff awakened for: {}", path),
+                            ProphecyLevel::Jade,
+                        );
+                    }
                     Task::none()
                 }
                 RightAltarMessage::StageFile(path) => {
