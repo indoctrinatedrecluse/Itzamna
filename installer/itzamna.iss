@@ -3,7 +3,7 @@
 
 #define MyAppName "Itzamna"
 #define MyAppFullName "Itzamná — Mesoamerican Git Studio"
-#define MyAppVersion "0.1.1"
+#define MyAppVersion "0.1.2"
 #define MyAppPublisher "indoctrinatedrecluse"
 #define MyAppURL "https://github.com/indoctrinatedrecluse/Itzamna"
 #define MyAppExeName "itzamna-desktop.exe"

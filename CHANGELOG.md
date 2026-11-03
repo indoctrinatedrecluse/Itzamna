@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.2] - 2026-11-03
+
+### Added
+- **Multi-File Stelae Diff View (`ui/diff_workbench.rs`):**
+  - Integrated interactive multi-card stelae diff system in the Etz'nab' Stone Diff workbench.
+  - Active file renders fully expanded with intraline syntax hunks, old/new line gutters, surgical hunk staging, and direct "Edit in K'atun ✎" action.
+  - Neighboring files from the selected commit or working tree render above and below as compact minimized Mayan cards showing status pills (`[A]`, `[M]`, `[D]`) and `+X -Y` statistics.
+  - Instant one-click stela expansion to seamlessly navigate across all altered files without losing context.
+- **Deep Git ODB & Working Tree Diff Queries (`git/repository.rs`):**
+  - Implemented `get_commit_file_diff(sha, file_path)` extracting historical blobs directly from child and parent trees via `git2`.
+  - Implemented `get_working_file_diff(file_path, is_staged)` querying the index, HEAD commit, and working directory files on disk.
+- **K'atun Code Editor Enhancements (`ui/code_editor.rs`):**
+  - Live syntax highlighting via `syntect` and `iced_highlighter` using `Base16Mocha` palette with automatic language detection from file extensions.
+  - Real-time cursor coordinates (`Ln X, Col Y`), total line count, and uppercase syntax indicator (`[RS]`, `[TOML]`, `[JSON]`, etc.) in the obsidian status bar.
+  - Path normalization resolving relative workspace relics directly against repository root.
+- **Auto Word-Wrapping & Boundary Protections:**
+  - Added `.wrapping(text::Wrapping::Word)` across all headings, blockquotes, list items, and paragraphs in `MayanMarkdown` (`ui/markdown.rs`).
+  - Added word wrapping on prophecy stream log rows in `BottomProphecy` (`ui/bottom_prophecy.rs`).
+  - Constrained commit summaries in `PopolVuhLogWorkbench` (`ui/popol_vuh_log.rs`) to ensure author badges and diff inspection buttons remain permanently visible.
+
+### Fixed
+- **Commit Details `+0 -0` File Diff Metric Bug (`git/detailed_commit.rs`):**
+  - Fixed root cause where delta stats were unpopulated in `DetailedCommit::from_git2_commit`.
+  - Now counts additions (`+`) and deletions (`-`) accurately per file using `diff.print(git2::DiffFormat::Patch, ...)`.
+- **Commit Details File Click Navigation:**
+  - Changed file entries in column 3 of the commit inspection chamber now dispatch `OpenCommitFileInDiff { sha, path }`, jumping directly to that file's live diff.
+
+---
+
 ## [0.1.1] - 2026-11-01
 
 ### Added
