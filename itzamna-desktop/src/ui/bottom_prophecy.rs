@@ -23,7 +23,7 @@ pub enum ProphecyMessage {
 
 #[derive(Debug, Clone)]
 pub struct ProphecyEntry {
-    pub timestamp: &'static str,
+    pub timestamp: String,
     pub glyph: &'static str,
     pub message: String,
     pub level: ProphecyLevel,
@@ -72,42 +72,51 @@ impl Default for BottomProphecy {
 
 impl BottomProphecy {
     pub fn new() -> Self {
+        let now = chrono::Local::now().format("%H:%M:%S").to_string();
         Self {
             is_expanded: true,
             height_mode: ProphecyHeight::Standard,
             active_filter: None,
             entries: vec![
                 ProphecyEntry {
-                    timestamp: "22:44:08",
-                    glyph: "☀️",
-                    message: "Solar commit sealed: 3b7f7a1 — 'feat(desktop): complete Phase 1'".into(),
-                    level: ProphecyLevel::Solar,
+                    timestamp: now.clone(),
+                    glyph: "🔱",
+                    message: "Itzamna Git Studio initialised — Sanctuary synchronized".into(),
+                    level: ProphecyLevel::Jade,
                 },
                 ProphecyEntry {
-                    timestamp: "22:47:44",
+                    timestamp: now.clone(),
                     glyph: "🏛️",
-                    message: "Awakening Stelae Palace (Phase 2 multi-panel layout)".into(),
+                    message: "Awakened Stelae Palace & Celestial Loom".into(),
                     level: ProphecyLevel::Jade,
                 },
                 ProphecyEntry {
-                    timestamp: "22:49:05",
+                    timestamp: now,
                     glyph: "📁",
-                    message: "Background asset verified: assets/video_loop.bin stream online".into(),
-                    level: ProphecyLevel::Jade,
-                },
-                ProphecyEntry {
-                    timestamp: "22:50:00",
-                    glyph: "🌙",
-                    message: "Ixchel Oracle bridge listening on http://127.0.0.1:9090".into(),
+                    message: "Background asset stream online".into(),
                     level: ProphecyLevel::Maya,
                 },
             ],
         }
     }
 
-    pub fn push(&mut self, timestamp: &'static str, glyph: &'static str, msg: String, level: ProphecyLevel) {
+    pub fn push(&mut self, timestamp: &str, glyph: &'static str, msg: String, level: ProphecyLevel) {
+        let ts = if timestamp.is_empty() || timestamp == "23:55:00" {
+            chrono::Local::now().format("%H:%M:%S").to_string()
+        } else {
+            timestamp.to_string()
+        };
         self.entries.push(ProphecyEntry {
-            timestamp,
+            timestamp: ts,
+            glyph,
+            message: msg,
+            level,
+        });
+    }
+
+    pub fn log(&mut self, glyph: &'static str, msg: String, level: ProphecyLevel) {
+        self.entries.push(ProphecyEntry {
+            timestamp: chrono::Local::now().format("%H:%M:%S").to_string(),
             glyph,
             message: msg,
             level,

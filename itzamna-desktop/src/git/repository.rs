@@ -26,6 +26,7 @@ pub struct ReflogEntryInfo {
     pub index: usize,
     pub old_sha: String,
     pub new_sha: String,
+    pub full_sha: String,
     pub committer_name: String,
     pub message: String,
     pub action_type: &'static str,
@@ -314,15 +315,45 @@ impl GitSanctuary {
 
     // --- REAL COMMIT CREATION ---
 
+    /// Returns the active author/committer signature according to Git hierarchy:
+    /// 1. Repository configured signature (checks local .git/config, global ~/.gitconfig, system config)
+    /// 2. Sanctuary credentials from local .git/config (user.name / user.email)
+    /// 3. Environment variables (GIT_AUTHOR_NAME / GIT_AUTHOR_EMAIL, USERNAME, USER)
+    /// 4. Graceful generic fallback ("Itzamna Scribe", "scribe@sanctuary.local")
+    pub fn sanctuary_signature(&self) -> Result<Signature<'static>, String> {
+        if let Ok(sig) = self.repo.signature() {
+            let name = sig.name().unwrap_or("Itzamna Scribe").to_string();
+            let email = sig.email().unwrap_or("scribe@sanctuary.local").to_string();
+            return Signature::now(&name, &email).map_err(|e| e.to_string());
+        }
+
+        let (name, email, _) = self.get_local_credentials();
+        if !name.trim().is_empty() && !email.trim().is_empty() {
+            return Signature::now(name.trim(), email.trim()).map_err(|e| e.to_string());
+        }
+
+        let env_name = std::env::var("GIT_AUTHOR_NAME")
+            .or_else(|_| std::env::var("GIT_COMMITTER_NAME"))
+            .or_else(|_| std::env::var("USERNAME"))
+            .or_else(|_| std::env::var("USER"))
+            .unwrap_or_else(|_| "Itzamna Scribe".to_string());
+
+        let env_email = std::env::var("GIT_AUTHOR_EMAIL")
+            .or_else(|_| std::env::var("GIT_COMMITTER_EMAIL"))
+            .unwrap_or_else(|_| {
+                let clean_name = env_name.to_lowercase().replace(' ', ".");
+                format!("{}@sanctuary.local", clean_name)
+            });
+
+        Signature::now(&env_name, &env_email).map_err(|e| e.to_string())
+    }
+
     pub fn create_commit(&self, summary: &str, description: &str) -> Result<String, String> {
         let mut index = self.repo.index().map_err(|e| e.to_string())?;
         let tree_oid = index.write_tree().map_err(|e| e.to_string())?;
         let tree = self.repo.find_tree(tree_oid).map_err(|e| e.to_string())?;
 
-        let sig = self
-            .repo
-            .signature()
-            .unwrap_or_else(|_| Signature::now("indoctrinatedrecluse", "recluse@itzamna.dev").unwrap());
+        let sig = self.sanctuary_signature()?;
 
         let full_msg = if description.is_empty() {
             summary.to_string()
@@ -363,10 +394,7 @@ impl GitSanctuary {
         let tree_oid = index.write_tree().map_err(|e| e.to_string())?;
         let tree = self.repo.find_tree(tree_oid).map_err(|e| e.to_string())?;
 
-        let sig = self
-            .repo
-            .signature()
-            .unwrap_or_else(|_| Signature::now("indoctrinatedrecluse", "recluse@itzamna.dev").unwrap());
+        let sig = self.sanctuary_signature()?;
 
         let full_msg = if description.is_empty() {
             summary.to_string()
@@ -419,7 +447,7 @@ impl GitSanctuary {
         };
         let output = std::process::Command::new("git")
             .current_dir(self.repo.workdir().unwrap_or(std::path::Path::new(".")))
-            .args(["push", "origin", branch])
+            .args(["push", "origin", "--", branch])
             .output()
             .map_err(|e| e.to_string())?;
         if output.status.success() {
@@ -439,7 +467,7 @@ impl GitSanctuary {
         };
         let output = std::process::Command::new("git")
             .current_dir(self.repo.workdir().unwrap_or(std::path::Path::new(".")))
-            .args(["pull", "--rebase", "origin", branch])
+            .args(["pull", "--rebase", "origin", "--", branch])
             .output()
             .map_err(|e| e.to_string())?;
         if output.status.success() {
@@ -535,10 +563,7 @@ impl GitSanctuary {
     pub fn create_tag(&self, tag_name: &str) -> Result<(), String> {
         let head = self.repo.head().map_err(|e| e.to_string())?;
         let obj = head.peel_to_commit().map_err(|e| e.to_string())?.into_object();
-        let sig = self
-            .repo
-            .signature()
-            .unwrap_or_else(|_| Signature::now("indoctrinatedrecluse", "recluse@itzamna.dev").unwrap());
+        let sig = self.sanctuary_signature()?;
 
         self.repo
             .tag(tag_name, &obj, &sig, tag_name, false)
@@ -547,10 +572,7 @@ impl GitSanctuary {
     }
 
     pub fn create_stash(&mut self, message: &str) -> Result<(), String> {
-        let sig = self
-            .repo
-            .signature()
-            .unwrap_or_else(|_| Signature::now("indoctrinatedrecluse", "recluse@itzamna.dev").unwrap());
+        let sig = self.sanctuary_signature()?;
 
         self.repo
             .stash_save(&sig, message, None)
@@ -659,10 +681,16 @@ impl GitSanctuary {
                 "ritual"
             };
 
+            let old_id = entry.id_old().to_string();
+            let new_id = entry.id_new().to_string();
+            let old_short = if old_id.len() >= 7 { old_id[..7].to_string() } else { old_id.clone() };
+            let new_short = if new_id.len() >= 7 { new_id[..7].to_string() } else { new_id.clone() };
+
             entries.push(ReflogEntryInfo {
                 index: idx,
-                old_sha: entry.id_old().to_string()[..7].to_string(),
-                new_sha: entry.id_new().to_string()[..7].to_string(),
+                old_sha: old_short,
+                new_sha: new_short,
+                full_sha: new_id,
                 committer_name: entry.committer().name().unwrap_or("Architect").to_string(),
                 message: msg,
                 action_type,
@@ -674,7 +702,11 @@ impl GitSanctuary {
 
     /// Reset HEAD to a given commit or reflog target
     pub fn reset_head(&self, target_sha: &str, reset_type: ResetType) -> Result<(), String> {
-        let obj = self.repo.revparse_single(target_sha).map_err(|e| e.to_string())?;
+        let obj = if let Ok(oid) = Oid::from_str(target_sha) {
+            self.repo.find_object(oid, None).map_err(|e| e.to_string())?
+        } else {
+            self.repo.revparse_single(target_sha).map_err(|e| e.to_string())?
+        };
         self.repo.reset(&obj, reset_type, None).map_err(|e| e.to_string())?;
         Ok(())
     }
@@ -748,10 +780,7 @@ impl GitSanctuary {
 
         let tree_oid = index.write_tree_to(&self.repo).map_err(|e| e.to_string())?;
         let tree = self.repo.find_tree(tree_oid).map_err(|e| e.to_string())?;
-        let sig = self
-            .repo
-            .signature()
-            .unwrap_or_else(|_| Signature::now("indoctrinatedrecluse", "recluse@itzamna.dev").unwrap());
+        let sig = self.sanctuary_signature()?;
 
         let parents: Vec<&Commit> = match strategy {
             MergeStrategy::Squash => vec![&head_commit],
@@ -786,10 +815,7 @@ impl GitSanctuary {
 
         let tree_oid = index.write_tree_to(&self.repo).map_err(|e| e.to_string())?;
         let tree = self.repo.find_tree(tree_oid).map_err(|e| e.to_string())?;
-        let sig = self
-            .repo
-            .signature()
-            .unwrap_or_else(|_| Signature::now("indoctrinatedrecluse", "recluse@itzamna.dev").unwrap());
+        let sig = self.sanctuary_signature()?;
 
         let msg = format!("cherry-pick: {}\n\n(cherry picked from commit {})", target_commit.summary().unwrap_or(""), commit_sha);
         let new_oid = self
@@ -975,6 +1001,35 @@ impl GitSanctuary {
         } else {
             let base_text = index_text.unwrap_or(head_text);
             (base_text, worktree_text)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sanctuary_signature_fallback() {
+        if let Ok(sanctuary) = GitSanctuary::open(".") {
+            let sig = sanctuary.sanctuary_signature();
+            assert!(sig.is_ok(), "Signature generation should always succeed");
+            let sig = sig.unwrap();
+            assert!(!sig.name().unwrap_or("").is_empty(), "Signature name must not be empty");
+            assert!(!sig.email().unwrap_or("").is_empty(), "Signature email must not be empty");
+        }
+    }
+
+    #[test]
+    fn test_reflog_full_sha_length() {
+        if let Ok(sanctuary) = GitSanctuary::open(".") {
+            if let Ok(entries) = sanctuary.get_reflog() {
+                for entry in entries {
+                    assert_eq!(entry.full_sha.len(), 40, "Reflog entry full_sha must be exactly 40 characters");
+                    assert!(entry.old_sha.len() <= 7, "Old SHA should be short representation");
+                    assert!(entry.new_sha.len() <= 7, "New SHA should be short representation");
+                }
+            }
         }
     }
 }

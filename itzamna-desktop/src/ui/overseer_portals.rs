@@ -24,7 +24,7 @@ pub struct OverseerPortalsWorkbench {
 
 impl Default for OverseerPortalsWorkbench {
     fn default() -> Self {
-        Self::new("main".to_string(), vec![("origin".to_string(), "https://github.com/indoctrinatedrecluse/Itzamna.git".to_string())])
+        Self::new("main".to_string(), Vec::new())
     }
 }
 

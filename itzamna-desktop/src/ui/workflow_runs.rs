@@ -65,8 +65,8 @@ impl CelestialWorkflows {
     }
 
     pub fn check_gh_installed() -> bool {
-        std::process::Command::new("where.exe")
-            .arg("gh")
+        std::process::Command::new("gh")
+            .arg("--version")
             .output()
             .map(|o| o.status.success())
             .unwrap_or(false)

@@ -82,14 +82,28 @@ impl ItzamnaApp {
 
         // 2. High-Efficiency Video Frames: Pre-decode into raw RGBA from unified video_loop.bin
         let mut video_frames = Vec::new();
-        let bin_paths = [
-            "itzamna-desktop/assets/video_loop.bin",
-            "assets/video_loop.bin",
-            "D:/Projects/Itzamna/itzamna-desktop/assets/video_loop.bin",
-            "D:/Projects/Itzamna/assets/video_loop.bin",
-        ];
 
-        if let Some(bin_path) = bin_paths.iter().find(|p| std::path::Path::new(p).exists()) {
+        let mut candidate_dirs: Vec<std::path::PathBuf> = Vec::new();
+        if let Ok(exe_path) = std::env::current_exe() {
+            if let Some(exe_dir) = exe_path.parent() {
+                candidate_dirs.push(exe_dir.to_path_buf());
+                if let Some(parent) = exe_dir.parent() {
+                    candidate_dirs.push(parent.to_path_buf());
+                }
+            }
+        }
+        if let Ok(cwd) = std::env::current_dir() {
+            candidate_dirs.push(cwd);
+        }
+
+        let mut bin_paths = Vec::new();
+        for base in &candidate_dirs {
+            bin_paths.push(base.join("itzamna-desktop/assets/video_loop.bin"));
+            bin_paths.push(base.join("assets/video_loop.bin"));
+            bin_paths.push(base.join("video_loop.bin"));
+        }
+
+        if let Some(bin_path) = bin_paths.iter().find(|p| p.exists()) {
             if let Ok(bytes) = std::fs::read(bin_path) {
                 if bytes.len() > 8 && &bytes[0..4] == b"ITZM" {
                     let total_frames = u32::from_le_bytes(bytes[4..8].try_into().unwrap_or_default()) as usize;
@@ -113,16 +127,16 @@ impl ItzamnaApp {
 
         // Fallback: search individual video frame files if binary container absent
         if video_frames.is_empty() {
-            let frame_search_dirs = [
-                "itzamna-desktop/assets/video_frames",
-                "assets/video_frames",
-                "D:/Projects/Itzamna/itzamna-desktop/assets/video_frames",
-                "D:/Projects/Itzamna/assets/video_frames",
-            ];
+            let mut frame_search_dirs = Vec::new();
+            for base in &candidate_dirs {
+                frame_search_dirs.push(base.join("itzamna-desktop/assets/video_frames"));
+                frame_search_dirs.push(base.join("assets/video_frames"));
+                frame_search_dirs.push(base.join("video_frames"));
+            }
 
-            if let Some(dir) = frame_search_dirs.iter().find(|dir| std::path::Path::new(dir).exists()) {
+            if let Some(dir) = frame_search_dirs.iter().find(|dir| dir.exists()) {
                 for i in (0..120).step_by(3) {
-                    let frame_path = format!("{}/frame_{:03}.jpg", dir, i);
+                    let frame_path = dir.join(format!("frame_{:03}.jpg", i));
                     if let Ok(bytes) = std::fs::read(&frame_path) {
                         if let Ok(img) = img_crate::load_from_memory(&bytes) {
                             let rgba = img.to_rgba8();
@@ -959,7 +973,7 @@ impl ItzamnaApp {
                                 ResetMode::Hard => git2::ResetType::Hard,
                             };
                             if let Some(ref s) = self.sanctuary {
-                                match s.reset_head(&entry.new_sha, git_reset_type) {
+                                match s.reset_head(&entry.full_sha, git_reset_type) {
                                     Ok(_) => {
                                         self.bottom_prophecy.push("23:55:00", "🪞", format!("Time-jump consecrated: Reset HEAD to [{}] ({:?})", entry.new_sha, git_reset_type), ProphecyLevel::Solar);
                                     }
@@ -1266,17 +1280,22 @@ impl ItzamnaApp {
                         Task::none()
                     }
                     WorkflowMessage::OpenRunUrl(url) => {
-                        let _ = std::process::Command::new("cmd")
-                            .args(["/C", "start", "", &url])
-                            .spawn();
+                        let _ = open::that(&url);
                         self.bottom_prophecy.push("23:55:00", "🌐", format!("Opening celestial workflow portal: {}", url), ProphecyLevel::Solar);
                         Task::none()
                     }
                     WorkflowMessage::InstallGhCli => {
-                        self.bottom_prophecy.push("23:55:00", "⚡", "Initiating GitHub CLI installation via winget...".into(), ProphecyLevel::Solar);
-                        let _ = std::process::Command::new("cmd")
-                            .args(["/C", "start", "powershell", "-NoExit", "-Command", "winget install --id GitHub.cli -e --source winget"])
-                            .spawn();
+                        self.bottom_prophecy.push("23:55:00", "⚡", "Initiating GitHub CLI installation...".into(), ProphecyLevel::Solar);
+                        #[cfg(target_os = "windows")]
+                        {
+                            let _ = std::process::Command::new("powershell")
+                                .args(["-NoExit", "-Command", "winget install --id GitHub.cli -e --source winget"])
+                                .spawn();
+                        }
+                        #[cfg(not(target_os = "windows"))]
+                        {
+                            let _ = open::that("https://cli.github.com/");
+                        }
                         Task::none()
                     }
                 },
