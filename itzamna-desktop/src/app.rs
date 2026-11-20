@@ -784,15 +784,93 @@ impl ItzamnaApp {
                         Task::none()
                     }
                     DiffMessage::StageHunk(idx) => {
-                        self.bottom_prophecy.push("23:55:00", "🔪", format!("Etz'nab' surgical stage: Hunk #{} consecrated to Altar", idx + 1), ProphecyLevel::Jade);
+                        let path = self.center_loom.diff_workbench.file_path.clone();
+                        let mut success = false;
+                        if let Some(ref diff) = self.center_loom.diff_workbench.file_diff {
+                            if let Some(hunk) = diff.hunks.get(idx) {
+                                let patch = hunk.to_patch(&path);
+                                if let Some(ref s) = self.sanctuary {
+                                    match s.apply_patch_to_index(&patch) {
+                                        Ok(_) => {
+                                            success = true;
+                                            self.bottom_prophecy.push("23:55:00", "🔪", format!("Etz'nab' surgical stage: Hunk #{} consecrated to Altar", idx + 1), ProphecyLevel::Jade);
+                                        }
+                                        Err(e) => {
+                                            self.bottom_prophecy.push("23:55:00", "⚠️", format!("Failed staging hunk: {}", e), ProphecyLevel::Xibalba);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if success {
+                            self.refresh_git_state();
+                            if let Some(ref s) = self.sanctuary {
+                                let is_staged = self.center_loom.diff_workbench.is_staged_context;
+                                let (old_text, new_text) = s.get_working_file_diff(&path, is_staged);
+                                let new_diff = crate::git::DiffEngine::compute_diff(&old_text, &new_text, &path);
+                                self.center_loom.diff_workbench.file_diff = Some(new_diff);
+                            }
+                        }
                         Task::none()
                     }
                     DiffMessage::UnstageHunk(idx) => {
-                        self.bottom_prophecy.push("23:55:00", "↩️", format!("Withdrew Hunk #{} from Altar", idx + 1), ProphecyLevel::Maya);
+                        let path = self.center_loom.diff_workbench.file_path.clone();
+                        let mut success = false;
+                        if let Some(ref diff) = self.center_loom.diff_workbench.file_diff {
+                            if let Some(hunk) = diff.hunks.get(idx) {
+                                let patch = hunk.to_patch(&path);
+                                if let Some(ref s) = self.sanctuary {
+                                    match s.unapply_patch_from_index(&patch) {
+                                        Ok(_) => {
+                                            success = true;
+                                            self.bottom_prophecy.push("23:55:00", "↩️", format!("Withdrew Hunk #{} from Altar", idx + 1), ProphecyLevel::Maya);
+                                        }
+                                        Err(e) => {
+                                            self.bottom_prophecy.push("23:55:00", "⚠️", format!("Failed unstaging hunk: {}", e), ProphecyLevel::Xibalba);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if success {
+                            self.refresh_git_state();
+                            if let Some(ref s) = self.sanctuary {
+                                let is_staged = self.center_loom.diff_workbench.is_staged_context;
+                                let (old_text, new_text) = s.get_working_file_diff(&path, is_staged);
+                                let new_diff = crate::git::DiffEngine::compute_diff(&old_text, &new_text, &path);
+                                self.center_loom.diff_workbench.file_diff = Some(new_diff);
+                            }
+                        }
                         Task::none()
                     }
                     DiffMessage::DiscardHunk(idx) => {
-                        self.bottom_prophecy.push("23:55:00", "⚠️", format!("Purified and discarded Hunk #{}", idx + 1), ProphecyLevel::Xibalba);
+                        let path = self.center_loom.diff_workbench.file_path.clone();
+                        let mut success = false;
+                        if let Some(ref diff) = self.center_loom.diff_workbench.file_diff {
+                            if let Some(hunk) = diff.hunks.get(idx) {
+                                let patch = hunk.to_patch(&path);
+                                if let Some(ref s) = self.sanctuary {
+                                    match s.discard_patch_from_workdir(&patch) {
+                                        Ok(_) => {
+                                            success = true;
+                                            self.bottom_prophecy.push("23:55:00", "⚠️", format!("Purified and discarded Hunk #{}", idx + 1), ProphecyLevel::Xibalba);
+                                        }
+                                        Err(e) => {
+                                            self.bottom_prophecy.push("23:55:00", "⚠️", format!("Failed discarding hunk: {}", e), ProphecyLevel::Xibalba);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if success {
+                            self.refresh_git_state();
+                            if let Some(ref s) = self.sanctuary {
+                                let is_staged = self.center_loom.diff_workbench.is_staged_context;
+                                let (old_text, new_text) = s.get_working_file_diff(&path, is_staged);
+                                let new_diff = crate::git::DiffEngine::compute_diff(&old_text, &new_text, &path);
+                                self.center_loom.diff_workbench.file_diff = Some(new_diff);
+                            }
+                        }
                         Task::none()
                     }
                     DiffMessage::StageEntireFile => {
@@ -1035,9 +1113,15 @@ impl ItzamnaApp {
                     }
                     PurifierMessage::SproutBranchFromStash(idx) => {
                         let branch_name = format!("stash-sprout-{}", idx);
-                        if let Some(ref s) = self.sanctuary {
-                            let _ = s.create_branch(&branch_name);
-                            self.bottom_prophecy.push("23:55:00", "🌿", format!("Sprouted branch '{}' from stash cist", branch_name), ProphecyLevel::Jade);
+                        if let Some(ref mut s) = self.sanctuary {
+                            match s.sprout_branch_from_stash(idx, &branch_name) {
+                                Ok(report) => {
+                                    self.bottom_prophecy.push("23:55:00", "🌿", report, ProphecyLevel::Jade);
+                                }
+                                Err(e) => {
+                                    self.bottom_prophecy.push("23:55:00", "⚠️", format!("Failed sprouting branch: {}", e), ProphecyLevel::Xibalba);
+                                }
+                            }
                         }
                         self.refresh_git_state();
                         Task::none()
@@ -1339,13 +1423,17 @@ impl ItzamnaApp {
                         } else {
                             &self.right_altar.unstaged_files
                         };
+                        let diff_counts = s.get_working_diff_counts(is_staged);
                         let files: Vec<DiffFileHeader> = source
                             .iter()
-                            .map(|f| DiffFileHeader {
-                                path: f.path.clone(),
-                                status: f.status.to_string(),
-                                additions: 0,
-                                deletions: 0,
+                            .map(|f| {
+                                let (additions, deletions) = diff_counts.get(&f.path).copied().unwrap_or((0, 0));
+                                DiffFileHeader {
+                                    path: f.path.clone(),
+                                    status: f.status.to_string(),
+                                    additions,
+                                    deletions,
+                                }
                             })
                             .collect();
 
@@ -1418,8 +1506,31 @@ impl ItzamnaApp {
                     self.refresh_git_state();
                     Task::none()
                 }
+                RightAltarMessage::DiscardFile(path) => {
+                    if let Some(ref s) = self.sanctuary {
+                        match s.discard_changes(&path) {
+                            Ok(_) => {
+                                self.bottom_prophecy.push("23:55:00", "↩️", format!("Discarded alterations in '{}'", path), ProphecyLevel::Jade);
+                            }
+                            Err(e) => {
+                                self.bottom_prophecy.push("23:55:00", "⚠️", format!("Discard failed: {}", e), ProphecyLevel::Xibalba);
+                            }
+                        }
+                    }
+                    self.refresh_git_state();
+                    Task::none()
+                }
                 RightAltarMessage::DiscardAll => {
-                    self.bottom_prophecy.push("23:55:00", "⚠️", "Purification ceremony performed (changes discarded)".into(), ProphecyLevel::Xibalba);
+                    if let Some(ref s) = self.sanctuary {
+                        match s.discard_all() {
+                            Ok(_) => {
+                                self.bottom_prophecy.push("23:55:00", "⚠️", "Purification ceremony performed: all alterations discarded".into(), ProphecyLevel::Xibalba);
+                            }
+                            Err(e) => {
+                                self.bottom_prophecy.push("23:55:00", "⚠️", format!("Discard all failed: {}", e), ProphecyLevel::Xibalba);
+                            }
+                        }
+                    }
                     self.refresh_git_state();
                     Task::none()
                 }

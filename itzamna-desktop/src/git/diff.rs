@@ -28,6 +28,24 @@ pub struct DiffHunk {
     pub is_staged: bool,
 }
 
+impl DiffHunk {
+    /// Formats this hunk into an exact unified diff patch accepted by `git apply`
+    pub fn to_patch(&self, file_path: &str) -> String {
+        let mut patch = format!("--- a/{}\n+++ b/{}\n{}\n", file_path, file_path, self.header);
+        for line in &self.lines {
+            let prefix = match line.tag {
+                DiffLineTag::Context => " ",
+                DiffLineTag::Addition => "+",
+                DiffLineTag::Deletion => "-",
+            };
+            patch.push_str(prefix);
+            patch.push_str(&line.content);
+            patch.push('\n');
+        }
+        patch
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct FileDiff {
     pub old_path: String,
@@ -42,10 +60,19 @@ impl DiffEngine {
         let text_diff = TextDiff::from_lines(old_text, new_text);
         let mut hunks = Vec::new();
 
-        for (idx, group) in text_diff.grouped_ops(3).into_iter().enumerate() {
+        for (_idx, group) in text_diff.grouped_ops(3).into_iter().enumerate() {
             let mut lines = Vec::new();
-            let mut old_lineno = 1;
-            let mut new_lineno = 1;
+
+            let old_start = group.first().map(|op| op.old_range().start + 1).unwrap_or(1);
+            let old_end = group.last().map(|op| op.old_range().end).unwrap_or(old_start);
+            let old_lines = old_end.saturating_sub(old_start.saturating_sub(1));
+
+            let new_start = group.first().map(|op| op.new_range().start + 1).unwrap_or(1);
+            let new_end = group.last().map(|op| op.new_range().end).unwrap_or(new_start);
+            let new_lines = new_end.saturating_sub(new_start.saturating_sub(1));
+
+            let mut old_lineno = old_start;
+            let mut new_lineno = new_start;
 
             for op in &group {
                 for change in text_diff.iter_changes(op) {
@@ -81,11 +108,11 @@ impl DiffEngine {
             }
 
             hunks.push(DiffHunk {
-                header: format!("@@ Hunk {} @@ Etz'nab' Flint Blade", idx + 1),
-                old_start: 1,
-                old_lines: lines.len(),
-                new_start: 1,
-                new_lines: lines.len(),
+                header: format!("@@ -{},{} +{},{} @@", old_start, old_lines, new_start, new_lines),
+                old_start,
+                old_lines,
+                new_start,
+                new_lines,
                 lines,
                 is_staged: false,
             });
@@ -128,5 +155,17 @@ mod tests {
         assert!(!diff.hunks.is_empty());
         let all_additions = diff.hunks[0].lines.iter().all(|l| l.tag == DiffLineTag::Addition);
         assert!(all_additions, "All lines should be additions when starting from empty");
+    }
+
+    #[test]
+    fn test_hunk_to_patch_format() {
+        let old = "line1\nline2\n";
+        let new = "line1\nline2_modified\n";
+        let diff = DiffEngine::compute_diff(old, new, "test.txt");
+        assert!(!diff.hunks.is_empty());
+        let patch = diff.hunks[0].to_patch("test.txt");
+        assert!(patch.starts_with("--- a/test.txt\n+++ b/test.txt\n@@"));
+        assert!(patch.contains("-line2"));
+        assert!(patch.contains("+line2_modified"));
     }
 }

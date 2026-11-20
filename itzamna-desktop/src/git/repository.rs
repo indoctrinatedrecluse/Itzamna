@@ -37,6 +37,7 @@ pub struct StashEntryDetail {
     pub index: usize,
     pub message: String,
     pub commit_sha: String,
+    pub full_sha: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -311,6 +312,117 @@ impl GitSanctuary {
             .checkout_head(Some(&mut checkout))
             .map_err(|e| e.to_string())?;
         Ok(())
+    }
+
+    pub fn discard_all(&self) -> Result<(), String> {
+        let mut checkout = git2::build::CheckoutBuilder::new();
+        checkout.force();
+        self.repo
+            .checkout_head(Some(&mut checkout))
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn get_working_diff_counts(&self, is_staged: bool) -> std::collections::HashMap<String, (usize, usize)> {
+        let mut map = std::collections::HashMap::new();
+        let mut opts = git2::DiffOptions::new();
+
+        let diff_res = if is_staged {
+            let head_tree = self.repo.head().ok().and_then(|h| h.peel_to_commit().ok()).and_then(|c| c.tree().ok());
+            let index = self.repo.index().ok();
+            index.and_then(|idx| self.repo.diff_tree_to_index(head_tree.as_ref(), Some(&idx), Some(&mut opts)).ok())
+        } else {
+            let index = self.repo.index().ok();
+            self.repo.diff_index_to_workdir(index.as_ref(), Some(&mut opts)).ok()
+        };
+
+        if let Some(diff) = diff_res {
+            let _ = diff.print(git2::DiffFormat::Patch, |delta, _hunk, line| {
+                let path = delta
+                    .new_file()
+                    .path()
+                    .or_else(|| delta.old_file().path())
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_default();
+                let entry = map.entry(path).or_insert((0, 0));
+                match line.origin() {
+                    '+' => entry.0 += 1,
+                    '-' => entry.1 += 1,
+                    _ => {}
+                }
+                true
+            });
+        }
+        map
+    }
+
+    pub fn apply_patch_to_index(&self, patch: &str) -> Result<(), String> {
+        let mut child = std::process::Command::new("git")
+            .current_dir(self.repo.workdir().unwrap_or(std::path::Path::new(".")))
+            .args(["apply", "--cached", "--unidiff-zero", "-"])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .map_err(|e| e.to_string())?;
+
+        if let Some(mut stdin) = child.stdin.take() {
+            use std::io::Write;
+            stdin.write_all(patch.as_bytes()).map_err(|e| e.to_string())?;
+        }
+
+        let output = child.wait_with_output().map_err(|e| e.to_string())?;
+        if output.status.success() {
+            Ok(())
+        } else {
+            Err(String::from_utf8_lossy(&output.stderr).to_string())
+        }
+    }
+
+    pub fn unapply_patch_from_index(&self, patch: &str) -> Result<(), String> {
+        let mut child = std::process::Command::new("git")
+            .current_dir(self.repo.workdir().unwrap_or(std::path::Path::new(".")))
+            .args(["apply", "--cached", "--reverse", "--unidiff-zero", "-"])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .map_err(|e| e.to_string())?;
+
+        if let Some(mut stdin) = child.stdin.take() {
+            use std::io::Write;
+            stdin.write_all(patch.as_bytes()).map_err(|e| e.to_string())?;
+        }
+
+        let output = child.wait_with_output().map_err(|e| e.to_string())?;
+        if output.status.success() {
+            Ok(())
+        } else {
+            Err(String::from_utf8_lossy(&output.stderr).to_string())
+        }
+    }
+
+    pub fn discard_patch_from_workdir(&self, patch: &str) -> Result<(), String> {
+        let mut child = std::process::Command::new("git")
+            .current_dir(self.repo.workdir().unwrap_or(std::path::Path::new(".")))
+            .args(["apply", "--reverse", "--unidiff-zero", "-"])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .map_err(|e| e.to_string())?;
+
+        if let Some(mut stdin) = child.stdin.take() {
+            use std::io::Write;
+            stdin.write_all(patch.as_bytes()).map_err(|e| e.to_string())?;
+        }
+
+        let output = child.wait_with_output().map_err(|e| e.to_string())?;
+        if output.status.success() {
+            Ok(())
+        } else {
+            Err(String::from_utf8_lossy(&output.stderr).to_string())
+        }
     }
 
     // --- REAL COMMIT CREATION ---
@@ -793,6 +905,11 @@ impl GitSanctuary {
             .commit(Some("HEAD"), &sig, &sig, &msg, &tree, &parents)
             .map_err(|e| e.to_string())?;
 
+        // Sync working tree with the merged commit tree
+        let mut checkout = git2::build::CheckoutBuilder::new();
+        checkout.force();
+        let _ = self.repo.checkout_tree(tree.as_object(), Some(&mut checkout));
+
         Ok(format!("Consecrated merge commit [{}]", &commit_oid.to_string()[..7]))
     }
 
@@ -822,6 +939,11 @@ impl GitSanctuary {
             .repo
             .commit(Some("HEAD"), &sig, &sig, &msg, &tree, &[&head_commit])
             .map_err(|e| e.to_string())?;
+
+        // Sync working tree with the plucked commit tree
+        let mut checkout = git2::build::CheckoutBuilder::new();
+        checkout.force();
+        let _ = self.repo.checkout_tree(tree.as_object(), Some(&mut checkout));
 
         Ok(format!("Plucked commit into [{}]", &new_oid.to_string()[..7]))
     }
@@ -862,7 +984,8 @@ impl GitSanctuary {
             details.push(StashEntryDetail {
                 index: idx,
                 message: name.to_string(),
-                commit_sha: oid.to_string()[..7].to_string(),
+                commit_sha: oid.to_string()[..7.min(oid.to_string().len())].to_string(),
+                full_sha: oid.to_string(),
             });
             true
         });
@@ -872,6 +995,26 @@ impl GitSanctuary {
     pub fn drop_stash(&mut self, index: usize) -> Result<(), String> {
         self.repo.stash_drop(index).map_err(|e| e.to_string())?;
         Ok(())
+    }
+
+    pub fn sprout_branch_from_stash(&mut self, stash_index: usize, branch_name: &str) -> Result<String, String> {
+        let mut target_commit_oid: Option<Oid> = None;
+        let _ = self.repo.stash_foreach(|idx, _name, oid| {
+            if idx == stash_index {
+                target_commit_oid = Some(*oid);
+                false
+            } else {
+                true
+            }
+        });
+
+        let stash_oid = target_commit_oid.ok_or_else(|| format!("Stash cist @{} not found", stash_index))?;
+        let commit = self.repo.find_commit(stash_oid).map_err(|e| e.to_string())?;
+
+        self.repo.branch(branch_name, &commit, false).map_err(|e| e.to_string())?;
+        self.switch_branch(branch_name)?;
+
+        Ok(format!("Sprouted branch '{}' from stash commit [{}]", branch_name, &stash_oid.to_string()[..7]))
     }
 
     /// 6. The Overseer Portals: Remote Operations
@@ -1029,6 +1172,16 @@ mod tests {
                     assert!(entry.old_sha.len() <= 7, "Old SHA should be short representation");
                     assert!(entry.new_sha.len() <= 7, "New SHA should be short representation");
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn test_working_diff_counts() {
+        if let Ok(sanctuary) = GitSanctuary::open(".") {
+            let counts = sanctuary.get_working_diff_counts(false);
+            for (path, (_add, _del)) in counts {
+                assert!(!path.is_empty());
             }
         }
     }

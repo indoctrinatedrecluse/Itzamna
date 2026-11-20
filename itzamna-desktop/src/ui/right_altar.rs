@@ -15,6 +15,7 @@ pub enum RightAltarMessage {
     UnstageFile(String),
     StageAll,
     UnstageAll,
+    DiscardFile(String),
     DiscardAll,
     CommitSummaryChanged(String),
     CommitDescriptionChanged(String),
@@ -209,6 +210,18 @@ impl RightAltar {
                         })
                         .on_press(RightAltarMessage::StageFile(file.path.clone()).into()),
                     "Stage file into index (git add)",
+                    iced::widget::tooltip::Position::Left,
+                ),
+                Space::new().width(4),
+                mayan_tooltip(
+                    button(text("↺").size(11).color(MayaColors::CINNABAR_BRIGHT))
+                        .padding(Padding::from([0, 5]))
+                        .style(|_theme, _status| button::Style {
+                            background: Some(Color::TRANSPARENT.into()),
+                            ..Default::default()
+                        })
+                        .on_press(RightAltarMessage::DiscardFile(file.path.clone()).into()),
+                    "Discard file alterations (git checkout HEAD -- <file>)",
                     iced::widget::tooltip::Position::Left,
                 ),
             ]

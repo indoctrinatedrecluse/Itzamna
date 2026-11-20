@@ -410,28 +410,80 @@ impl DiffWorkbench {
             text(&hunk.header).size(10).color(MayaColors::SOLAR_AMBER),
             Space::new().width(Length::Fill),
             if !is_commit_view {
-                mayan_tooltip(
-                    button(text("Stage Hunk +").size(10).color(MayaColors::JADE_GLOW))
-                        .padding(Padding::from([1, 6]))
-                        .style(|_, status| {
-                            let border_color = match status {
-                                button::Status::Hovered => MayaColors::JADE_GLOW,
-                                _ => MayaColors::JADE_SHADOW,
-                            };
-                            button::Style {
-                                background: Some(Color { a: 0.4, ..MayaColors::JADE_SHADOW }.into()),
-                                border: Border {
-                                    color: border_color,
-                                    width: 1.0,
-                                    radius: 3.0.into(),
-                                },
-                                ..Default::default()
-                            }
-                        })
-                        .on_press(DiffMessage::StageHunk(hunk_idx).into()),
-                    "Surgically stage this modification block into the index (git add -p)",
-                    Position::Left,
-                )
+                if self.is_staged_context {
+                    mayan_tooltip(
+                        button(text("Unstage Hunk -").size(10).color(MayaColors::CINNABAR_BRIGHT))
+                            .padding(Padding::from([1, 6]))
+                            .style(|_, status| {
+                                let border_color = match status {
+                                    button::Status::Hovered => MayaColors::CINNABAR_BRIGHT,
+                                    _ => MayaColors::OBSIDIAN_BORDER,
+                                };
+                                button::Style {
+                                    background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
+                                    border: Border {
+                                        color: border_color,
+                                        width: 1.0,
+                                        radius: 3.0.into(),
+                                    },
+                                    ..Default::default()
+                                }
+                            })
+                            .on_press(DiffMessage::UnstageHunk(hunk_idx).into()),
+                        "Surgically unstage this hunk from the index (git restore --staged -p)",
+                        Position::Left,
+                    )
+                } else {
+                    row![
+                        mayan_tooltip(
+                            button(text("Stage Hunk +").size(10).color(MayaColors::JADE_GLOW))
+                                .padding(Padding::from([1, 6]))
+                                .style(|_, status| {
+                                    let border_color = match status {
+                                        button::Status::Hovered => MayaColors::JADE_GLOW,
+                                        _ => MayaColors::JADE_SHADOW,
+                                    };
+                                    button::Style {
+                                        background: Some(Color { a: 0.4, ..MayaColors::JADE_SHADOW }.into()),
+                                        border: Border {
+                                            color: border_color,
+                                            width: 1.0,
+                                            radius: 3.0.into(),
+                                        },
+                                        ..Default::default()
+                                    }
+                                })
+                                .on_press(DiffMessage::StageHunk(hunk_idx).into()),
+                            "Surgically stage this modification block into the index (git add -p)",
+                            Position::Left,
+                        ),
+                        Space::new().width(6),
+                        mayan_tooltip(
+                            button(text("Discard ↺").size(10).color(MayaColors::CINNABAR_BRIGHT))
+                                .padding(Padding::from([1, 6]))
+                                .style(|_, status| {
+                                    let border_color = match status {
+                                        button::Status::Hovered => MayaColors::CINNABAR_BRIGHT,
+                                        _ => MayaColors::OBSIDIAN_BORDER,
+                                    };
+                                    button::Style {
+                                        background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
+                                        border: Border {
+                                            color: border_color,
+                                            width: 1.0,
+                                            radius: 3.0.into(),
+                                        },
+                                        ..Default::default()
+                                    }
+                                })
+                                .on_press(DiffMessage::DiscardHunk(hunk_idx).into()),
+                            "Discard this hunk from the working tree (git checkout --patch)",
+                            Position::Left,
+                        ),
+                    ]
+                    .align_y(Alignment::Center)
+                    .into()
+                }
             } else {
                 button(text("Signet Hunk").size(9).color(MayaColors::GLYPH_DIM))
                     .padding(Padding::from([1, 6]))
