@@ -47,6 +47,33 @@ pub enum MergeStrategy {
     Squash,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RebaseAction {
+    Pick,
+    Reword,
+    Squash,
+    Drop,
+}
+
+#[derive(Debug, Clone)]
+pub struct RebasePlanStep {
+    pub sha: String,
+    pub full_sha: String,
+    pub original_message: String,
+    pub current_message: String,
+    pub action: RebaseAction,
+}
+
+#[derive(Debug, Clone)]
+pub enum RebaseError {
+    Conflict {
+        conflicted_files: Vec<String>,
+        step_index: usize,
+        message: String,
+    },
+    Fatal(String),
+}
+
 #[derive(Debug, Clone)]
 pub struct GitCommitNode {
     pub sha: String,
@@ -1146,6 +1173,376 @@ impl GitSanctuary {
             (base_text, worktree_text)
         }
     }
+
+    // --- PHASE 3: K'UK'ULKAN REBASE & CONFLICT CRUCIBLE ---
+
+    /// Load commits between HEAD and upstream tracking branch (or recent commits if no upstream)
+    /// Returns Vec<(full_sha, commit_summary)> ordered chronologically (oldest at index 0).
+    pub fn load_rebase_candidates(&self) -> Result<Vec<(String, String)>, String> {
+        let head = self.repo.head().map_err(|e| e.to_string())?;
+        let head_commit = head.peel_to_commit().map_err(|e| e.to_string())?;
+        let head_oid = head_commit.id();
+
+        let upstream_oid = if let Some(branch_name) = head.shorthand() {
+            if let Ok(branch) = self.repo.find_branch(branch_name, BranchType::Local) {
+                branch.upstream().ok().and_then(|u| u.get().target())
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        let mut revwalk = self.repo.revwalk().map_err(|e| e.to_string())?;
+        revwalk.set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::TIME).map_err(|e| e.to_string())?;
+        revwalk.push(head_oid).map_err(|e| e.to_string())?;
+
+        if let Some(up_oid) = upstream_oid {
+            let _ = revwalk.hide(up_oid);
+        }
+
+        let mut candidates = Vec::new();
+        let max_count = if upstream_oid.is_some() { 100 } else { 20 };
+
+        for oid_res in revwalk.take(max_count) {
+            if let Ok(oid) = oid_res {
+                if let Ok(commit) = self.repo.find_commit(oid) {
+                    let summary = commit.summary().unwrap_or("Sacred Inscription").to_string();
+                    candidates.push((oid.to_string(), summary));
+                }
+            }
+        }
+
+        // Chronological order: oldest at index 0 (top of rebase sequencer)
+        candidates.reverse();
+        Ok(candidates)
+    }
+
+    /// Retrieve the list of files currently in conflict from the Git index.
+    pub fn get_conflicted_files(&self) -> Vec<String> {
+        let mut files = Vec::new();
+        if let Ok(index) = self.repo.index() {
+            if let Ok(conflicts) = index.conflicts() {
+                for c in conflicts.flatten() {
+                    if let Some(our) = c.our {
+                        files.push(String::from_utf8_lossy(&our.path).to_string());
+                    } else if let Some(their) = c.their {
+                        files.push(String::from_utf8_lossy(&their.path).to_string());
+                    } else if let Some(ancestor) = c.ancestor {
+                        files.push(String::from_utf8_lossy(&ancestor.path).to_string());
+                    }
+                }
+            }
+        }
+        files.sort();
+        files.dedup();
+        files
+    }
+
+    /// Read the (ours, theirs) file contents for a conflicted file path.
+    pub fn get_conflict_contents(&self, file_path: &str) -> (String, String) {
+        let mut ours = String::new();
+        let mut theirs = String::new();
+
+        if let Ok(index) = self.repo.index() {
+            if let Ok(conflicts) = index.conflicts() {
+                for c in conflicts.flatten() {
+                    let matches_our = c.our.as_ref().map(|e| String::from_utf8_lossy(&e.path) == file_path).unwrap_or(false);
+                    let matches_their = c.their.as_ref().map(|e| String::from_utf8_lossy(&e.path) == file_path).unwrap_or(false);
+
+                    if matches_our || matches_their {
+                        if let Some(our_entry) = c.our {
+                            if let Ok(blob) = self.repo.find_blob(our_entry.id) {
+                                ours = String::from_utf8_lossy(blob.content()).to_string();
+                            }
+                        }
+                        if let Some(their_entry) = c.their {
+                            if let Ok(blob) = self.repo.find_blob(their_entry.id) {
+                                theirs = String::from_utf8_lossy(blob.content()).to_string();
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Fallback: if blobs were empty, read using git show :2 / :3
+        if ours.is_empty() {
+            if let Ok(out) = std::process::Command::new("git")
+                .current_dir(self.repo.workdir().unwrap_or(Path::new(".")))
+                .args(["show", &format!(":2:{}", file_path)])
+                .output()
+            {
+                if out.status.success() {
+                    ours = String::from_utf8_lossy(&out.stdout).to_string();
+                }
+            }
+        }
+        if theirs.is_empty() {
+            if let Ok(out) = std::process::Command::new("git")
+                .current_dir(self.repo.workdir().unwrap_or(Path::new(".")))
+                .args(["show", &format!(":3:{}", file_path)])
+                .output()
+            {
+                if out.status.success() {
+                    theirs = String::from_utf8_lossy(&out.stdout).to_string();
+                }
+            }
+        }
+
+        (ours, theirs)
+    }
+
+    /// Resolve conflict by adopting OURS (local branch version) and staging the result.
+    pub fn resolve_conflict_ours(&self, file_path: &str) -> Result<(), String> {
+        let output = std::process::Command::new("git")
+            .current_dir(self.repo.workdir().unwrap_or(Path::new(".")))
+            .args(["checkout", "--ours", "--", file_path])
+            .output()
+            .map_err(|e| e.to_string())?;
+
+        if !output.status.success() {
+            return Err(String::from_utf8_lossy(&output.stderr).to_string());
+        }
+
+        self.stage_path(file_path)
+    }
+
+    /// Resolve conflict by adopting THEIRS (incoming rebase version) and staging the result.
+    pub fn resolve_conflict_theirs(&self, file_path: &str) -> Result<(), String> {
+        let output = std::process::Command::new("git")
+            .current_dir(self.repo.workdir().unwrap_or(Path::new(".")))
+            .args(["checkout", "--theirs", "--", file_path])
+            .output()
+            .map_err(|e| e.to_string())?;
+
+        if !output.status.success() {
+            return Err(String::from_utf8_lossy(&output.stderr).to_string());
+        }
+
+        self.stage_path(file_path)
+    }
+
+    /// Resolve conflict by concatenating both versions (Ours then Theirs) and staging the result.
+    pub fn resolve_conflict_both(&self, file_path: &str) -> Result<(), String> {
+        let (ours, theirs) = self.get_conflict_contents(file_path);
+        let combined = format!("{}\n{}", ours.trim_end(), theirs);
+
+        let workdir = self.repo.workdir().unwrap_or(Path::new("."));
+        let full_path = workdir.join(file_path);
+        std::fs::write(&full_path, combined).map_err(|e| e.to_string())?;
+
+        self.stage_path(file_path)
+    }
+
+    /// Abort in-progress rebase and restore the previous state from ORIG_HEAD.
+    pub fn abort_rebase(&self) -> Result<(), String> {
+        // Try resetting to ORIG_HEAD
+        if let Ok(orig_obj) = self.repo.revparse_single("ORIG_HEAD") {
+            self.repo.reset(&orig_obj, ResetType::Hard, None).map_err(|e| e.to_string())?;
+            if let Ok(mut r) = self.repo.find_reference("ORIG_HEAD") {
+                let _ = r.delete();
+            }
+            return Ok(());
+        }
+
+        // Fallback to git CLI
+        let _ = std::process::Command::new("git")
+            .current_dir(self.repo.workdir().unwrap_or(Path::new(".")))
+            .args(["rebase", "--abort"])
+            .output();
+
+        let head = self.repo.head().map_err(|e| e.to_string())?;
+        let commit = head.peel_to_commit().map_err(|e| e.to_string())?;
+        self.repo.reset(commit.as_object(), ResetType::Hard, None).map_err(|e| e.to_string())
+    }
+
+    /// Execute interactive rebase plan across given steps using cherry-pick sequencer.
+    pub fn execute_rebase_plan(&self, steps: &[RebasePlanStep]) -> Result<String, RebaseError> {
+        let (unstaged, staged) = self.get_status_files();
+        if !unstaged.is_empty() || !staged.is_empty() {
+            return Err(RebaseError::Fatal(
+                "Cannot execute rebase: working tree has uncommitted modifications. Please stash or commit changes first.".into()
+            ));
+        }
+
+        if steps.is_empty() {
+            return Ok("No rebase operations specified.".into());
+        }
+
+        // Validate: first active step cannot be Squash
+        if let Some(first_active) = steps.iter().find(|s| s.action != RebaseAction::Drop) {
+            if first_active.action == RebaseAction::Squash {
+                return Err(RebaseError::Fatal(
+                    "Cannot squash the initial commit in rebase range — squash requires an earlier commit to fold into.".into()
+                ));
+            }
+        }
+
+        // Validate: cannot drop all commits
+        if steps.iter().all(|s| s.action == RebaseAction::Drop) {
+            return Err(RebaseError::Fatal("Cannot drop all commits in rebase range.".into()));
+        }
+
+        // Save ORIG_HEAD
+        let head = self.repo.head().map_err(|e| RebaseError::Fatal(e.to_string()))?;
+        let head_commit = head.peel_to_commit().map_err(|e| RebaseError::Fatal(e.to_string()))?;
+        let _ = self.repo.reference("ORIG_HEAD", head_commit.id(), true, "itzamna: rebase begin");
+
+        // Base commit is the parent of the first step
+        let first_oid = Oid::from_str(&steps[0].full_sha).map_err(|e| RebaseError::Fatal(e.to_string()))?;
+        let first_commit = self.repo.find_commit(first_oid).map_err(|e| RebaseError::Fatal(e.to_string()))?;
+
+        if first_commit.parent_count() == 0 {
+            return Err(RebaseError::Fatal("Rebasing root commit is not currently supported.".into()));
+        }
+
+        let base_commit = first_commit.parent(0).map_err(|e| RebaseError::Fatal(e.to_string()))?;
+
+        // Reset HEAD to base
+        self.repo
+            .reset(base_commit.as_object(), ResetType::Hard, None)
+            .map_err(|e| RebaseError::Fatal(format!("Failed to reset HEAD to base commit: {}", e)))?;
+
+        // Sequentially apply each step
+        for (idx, step) in steps.iter().enumerate() {
+            self.apply_single_rebase_step(idx, step)?;
+        }
+
+        let final_head = self.repo.head().ok().and_then(|h| h.peel_to_commit().ok());
+        let final_sha = final_head.map(|c| c.id().to_string()[..7].to_string()).unwrap_or_default();
+        Ok(format!("K'uk'ulkan Rebase ritual concluded! Sovereign HEAD is [{}]", final_sha))
+    }
+
+    /// Internal helper: Apply a single rebase step
+    fn apply_single_rebase_step(&self, idx: usize, step: &RebasePlanStep) -> Result<(), RebaseError> {
+        if step.action == RebaseAction::Drop {
+            return Ok(());
+        }
+
+        let target_oid = Oid::from_str(&step.full_sha).map_err(|e| RebaseError::Fatal(e.to_string()))?;
+        let target_commit = self.repo.find_commit(target_oid).map_err(|e| RebaseError::Fatal(e.to_string()))?;
+
+        let head = self.repo.head().map_err(|e| RebaseError::Fatal(e.to_string()))?;
+        let head_commit = head.peel_to_commit().map_err(|e| RebaseError::Fatal(e.to_string()))?;
+
+        let mut index = self
+            .repo
+            .cherrypick_commit(&target_commit, &head_commit, 0, None)
+            .map_err(|e| RebaseError::Fatal(e.to_string()))?;
+
+        if index.has_conflicts() {
+            let mut checkout_opts = git2::build::CheckoutBuilder::new();
+            checkout_opts.conflict_style_merge(true);
+            let _ = self.repo.checkout_index(Some(&mut index), Some(&mut checkout_opts));
+            let _ = index.write();
+
+            let conflicted_files = self.get_conflicted_files();
+            return Err(RebaseError::Conflict {
+                conflicted_files,
+                step_index: idx,
+                message: format!(
+                    "Conflict encountered while applying [{}] '{}'",
+                    &step.full_sha[..7.min(step.full_sha.len())],
+                    step.current_message
+                ),
+            });
+        }
+
+        let tree_oid = index.write_tree_to(&self.repo).map_err(|e| RebaseError::Fatal(e.to_string()))?;
+        let tree = self.repo.find_tree(tree_oid).map_err(|e| RebaseError::Fatal(e.to_string()))?;
+        let sig = self.sanctuary_signature().map_err(RebaseError::Fatal)?;
+
+        match step.action {
+            RebaseAction::Pick => {
+                let msg = if step.current_message.trim().is_empty() {
+                    target_commit.message().unwrap_or("Sacred Inscription")
+                } else {
+                    &step.current_message
+                };
+                self.repo
+                    .commit(Some("HEAD"), &sig, &sig, msg, &tree, &[&head_commit])
+                    .map_err(|e| RebaseError::Fatal(e.to_string()))?;
+            }
+            RebaseAction::Reword => {
+                let msg = &step.current_message;
+                self.repo
+                    .commit(Some("HEAD"), &sig, &sig, msg, &tree, &[&head_commit])
+                    .map_err(|e| RebaseError::Fatal(e.to_string()))?;
+            }
+            RebaseAction::Squash => {
+                let parent_msg = head_commit.message().unwrap_or("").trim();
+                let combined_msg = format!("{}\n\n- {}", parent_msg, step.current_message.trim());
+                head_commit
+                    .amend(Some("HEAD"), Some(&sig), Some(&sig), None, Some(&combined_msg), Some(&tree))
+                    .map_err(|e| RebaseError::Fatal(e.to_string()))?;
+            }
+            RebaseAction::Drop => {}
+        }
+
+        let mut checkout = git2::build::CheckoutBuilder::new();
+        checkout.force();
+        let _ = self.repo.checkout_head(Some(&mut checkout));
+
+        Ok(())
+    }
+
+    /// Continue rebase execution after resolving all conflicts in the active step.
+    pub fn continue_rebase_plan(
+        &self,
+        current_step_index: usize,
+        steps: &[RebasePlanStep],
+    ) -> Result<String, RebaseError> {
+        let conflicts = self.get_conflicted_files();
+        if !conflicts.is_empty() {
+            return Err(RebaseError::Conflict {
+                conflicted_files: conflicts,
+                step_index: current_step_index,
+                message: "Conflicts remain in index. Please resolve all conflicts and stage files before continuing.".into(),
+            });
+        }
+
+        // Commit the resolved conflict state for the current step
+        if let Some(step) = steps.get(current_step_index) {
+            let mut index = self.repo.index().map_err(|e| RebaseError::Fatal(e.to_string()))?;
+            let tree_oid = index.write_tree_to(&self.repo).map_err(|e| RebaseError::Fatal(e.to_string()))?;
+            let tree = self.repo.find_tree(tree_oid).map_err(|e| RebaseError::Fatal(e.to_string()))?;
+            let sig = self.sanctuary_signature().map_err(RebaseError::Fatal)?;
+            let head = self.repo.head().map_err(|e| RebaseError::Fatal(e.to_string()))?;
+            let head_commit = head.peel_to_commit().map_err(|e| RebaseError::Fatal(e.to_string()))?;
+
+            if step.action == RebaseAction::Squash {
+                let parent_msg = head_commit.message().unwrap_or("").trim();
+                let combined_msg = format!("{}\n\n- {}", parent_msg, step.current_message.trim());
+                head_commit
+                    .amend(Some("HEAD"), Some(&sig), Some(&sig), None, Some(&combined_msg), Some(&tree))
+                    .map_err(|e| RebaseError::Fatal(e.to_string()))?;
+            } else {
+                let msg = if step.current_message.trim().is_empty() {
+                    "Resolved rebase step"
+                } else {
+                    step.current_message.trim()
+                };
+                self.repo
+                    .commit(Some("HEAD"), &sig, &sig, msg, &tree, &[&head_commit])
+                    .map_err(|e| RebaseError::Fatal(e.to_string()))?;
+            }
+
+            let mut checkout = git2::build::CheckoutBuilder::new();
+            checkout.force();
+            let _ = self.repo.checkout_head(Some(&mut checkout));
+        }
+
+        // Continue remaining steps
+        for idx in (current_step_index + 1)..steps.len() {
+            self.apply_single_rebase_step(idx, &steps[idx])?;
+        }
+
+        let final_head = self.repo.head().ok().and_then(|h| h.peel_to_commit().ok());
+        let final_sha = final_head.map(|c| c.id().to_string()[..7].to_string()).unwrap_or_default();
+        Ok(format!("K'uk'ulkan Rebase ritual concluded! Sovereign HEAD is [{}]", final_sha))
+    }
 }
 
 #[cfg(test)]
@@ -1184,5 +1581,32 @@ mod tests {
                 assert!(!path.is_empty());
             }
         }
+    }
+
+    #[test]
+    fn test_load_rebase_candidates() {
+        if let Ok(sanctuary) = GitSanctuary::open(".") {
+            let candidates = sanctuary.load_rebase_candidates();
+            assert!(candidates.is_ok(), "Loading rebase candidates should succeed");
+            let candidates = candidates.unwrap();
+            for (sha, summary) in &candidates {
+                assert_eq!(sha.len(), 40, "Candidate SHA should be 40 chars full hash");
+                assert!(!summary.is_empty(), "Candidate commit summary should not be empty");
+            }
+        }
+    }
+
+    #[test]
+    fn test_rebase_action_variants() {
+        let step = RebasePlanStep {
+            sha: "abcdef1".into(),
+            full_sha: "abcdef1234567890123456789012345678901234".into(),
+            original_message: "original".into(),
+            current_message: "updated".into(),
+            action: RebaseAction::Pick,
+        };
+        assert_eq!(step.action, RebaseAction::Pick);
+        assert_eq!(step.sha.len(), 7);
+        assert_eq!(step.full_sha.len(), 40);
     }
 }

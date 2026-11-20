@@ -5,6 +5,6 @@ pub mod repository;
 pub use detailed_commit::{CommitFileChange, DetailedCommit};
 pub use diff::{DiffEngine, DiffHunk, DiffLine, DiffLineTag, FileDiff};
 pub use repository::{
-    BlameLineInfo, FileStatus, GitCommitNode, GitSanctuary, MergeStrategy, ReflogEntryInfo,
-    StashEntryDetail,
+    BlameLineInfo, FileStatus, GitCommitNode, GitSanctuary, MergeStrategy, RebaseAction,
+    RebaseError, RebasePlanStep, ReflogEntryInfo, StashEntryDetail,
 };

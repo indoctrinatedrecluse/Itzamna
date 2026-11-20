@@ -342,6 +342,25 @@ impl ItzamnaApp {
         self.center_loom.overseer_portals.remotes = s.get_remote_details();
         self.center_loom.overseer_portals.active_branch = head_branch;
         self.left_codex.workspace_files = s.list_workspace_files();
+
+        // Synchronize conflict status
+        let conflicts = s.get_conflicted_files();
+        if !conflicts.is_empty() {
+            self.center_loom.rebase_crucible.has_conflict = true;
+            self.center_loom.rebase_crucible.conflicted_files = conflicts.clone();
+            if self.center_loom.rebase_crucible.conflict_file.is_empty()
+                || !conflicts.contains(&self.center_loom.rebase_crucible.conflict_file)
+            {
+                if let Some(first) = conflicts.first() {
+                    let (ours, theirs) = s.get_conflict_contents(first);
+                    self.center_loom.rebase_crucible.conflict_file = first.clone();
+                    self.center_loom.rebase_crucible.conflict_ours = ours;
+                    self.center_loom.rebase_crucible.conflict_theirs = theirs;
+                }
+            }
+        } else if !self.center_loom.rebase_crucible.is_rebasing {
+            self.center_loom.rebase_crucible.has_conflict = false;
+        }
     }
 
     pub fn subscription(&self) -> Subscription<Message> {
@@ -888,6 +907,44 @@ impl ItzamnaApp {
                     }
                 },
                 CenterLoomMessage::Rebase(r_msg) => match r_msg {
+                    RebaseMessage::LoadRebaseSteps => {
+                        if let Some(ref s) = self.sanctuary {
+                            match s.load_rebase_candidates() {
+                                Ok(candidates) => {
+                                    let count = candidates.len();
+                                    let steps: Vec<crate::ui::RebaseStep> = candidates
+                                        .into_iter()
+                                        .map(|(full_sha, summary)| {
+                                            let short_sha = full_sha[..7.min(full_sha.len())].to_string();
+                                            crate::ui::RebaseStep {
+                                                sha: short_sha,
+                                                full_sha,
+                                                original_message: summary.clone(),
+                                                current_message: summary,
+                                                action: crate::git::RebaseAction::Pick,
+                                            }
+                                        })
+                                        .collect();
+                                    self.center_loom.rebase_crucible.load_steps(steps);
+                                    self.bottom_prophecy.push(
+                                        "23:55:00",
+                                        "⚡",
+                                        format!("Populated {} unpushed commits into K'uk'ulkan Rebase Sequencer", count),
+                                        ProphecyLevel::Solar,
+                                    );
+                                }
+                                Err(e) => {
+                                    self.bottom_prophecy.push(
+                                        "23:55:00",
+                                        "⚠️",
+                                        format!("Failed loading rebase candidates: {}", e),
+                                        ProphecyLevel::Xibalba,
+                                    );
+                                }
+                            }
+                        }
+                        Task::none()
+                    }
                     RebaseMessage::SetAction(idx, action) => {
                         if let Some(step) = self.center_loom.rebase_crucible.steps.get_mut(idx) {
                             step.action = action;
@@ -913,22 +970,219 @@ impl ItzamnaApp {
                         Task::none()
                     }
                     RebaseMessage::ExecuteRebase => {
-                        self.bottom_prophecy.push("23:55:00", "🔥", "Executing K'uk'ulkan Rebase Ritual across commits".into(), ProphecyLevel::Solar);
+                        let plan_steps: Vec<crate::git::RebasePlanStep> = self
+                            .center_loom
+                            .rebase_crucible
+                            .steps
+                            .iter()
+                            .map(|s| crate::git::RebasePlanStep {
+                                sha: s.sha.clone(),
+                                full_sha: s.full_sha.clone(),
+                                original_message: s.original_message.clone(),
+                                current_message: s.current_message.clone(),
+                                action: s.action,
+                            })
+                            .collect();
+
+                        if let Some(ref s) = self.sanctuary {
+                            match s.execute_rebase_plan(&plan_steps) {
+                                Ok(msg) => {
+                                    self.center_loom.rebase_crucible.reset_rebase();
+                                    self.center_loom.rebase_crucible.set_feedback(msg.clone());
+                                    self.refresh_git_state();
+                                    self.bottom_prophecy.push("23:55:00", "🔥", msg, ProphecyLevel::Solar);
+                                }
+                                Err(crate::git::RebaseError::Conflict {
+                                    conflicted_files,
+                                    step_index,
+                                    message,
+                                }) => {
+                                    let first_file = conflicted_files.first().cloned().unwrap_or_default();
+                                    let (ours, theirs) = s.get_conflict_contents(&first_file);
+                                    self.center_loom.rebase_crucible.set_conflict(
+                                        first_file.clone(),
+                                        ours,
+                                        theirs,
+                                        conflicted_files.clone(),
+                                        step_index,
+                                        message.clone(),
+                                    );
+                                    self.refresh_git_state();
+                                    self.bottom_prophecy.push(
+                                        "23:55:00",
+                                        "⚔️",
+                                        format!("Conflict encountered on file '{}' during rebase step #{}", first_file, step_index + 1),
+                                        ProphecyLevel::Xibalba,
+                                    );
+                                }
+                                Err(crate::git::RebaseError::Fatal(e)) => {
+                                    self.center_loom.rebase_crucible.set_feedback(format!("Rebase halted: {}", e));
+                                    self.bottom_prophecy.push(
+                                        "23:55:00",
+                                        "⚠️",
+                                        format!("Rebase fatal error: {}", e),
+                                        ProphecyLevel::Xibalba,
+                                    );
+                                }
+                            }
+                        }
+                        Task::none()
+                    }
+                    RebaseMessage::SelectConflictFile(path) => {
+                        if let Some(ref s) = self.sanctuary {
+                            let (ours, theirs) = s.get_conflict_contents(&path);
+                            self.center_loom.rebase_crucible.conflict_file = path;
+                            self.center_loom.rebase_crucible.conflict_ours = ours;
+                            self.center_loom.rebase_crucible.conflict_theirs = theirs;
+                        }
                         Task::none()
                     }
                     RebaseMessage::ResolveConflictOurs => {
-                        self.center_loom.rebase_crucible.has_conflict = false;
-                        self.bottom_prophecy.push("23:55:00", "⚖️", "Conflict resolved: Preserved local changes (Ours)".into(), ProphecyLevel::Jade);
+                        let file = self.center_loom.rebase_crucible.conflict_file.clone();
+                        if let Some(ref s) = self.sanctuary {
+                            if let Err(e) = s.resolve_conflict_ours(&file) {
+                                self.bottom_prophecy.push("23:55:00", "⚠️", format!("Failed resolving ours for {}: {}", file, e), ProphecyLevel::Xibalba);
+                            } else {
+                                self.bottom_prophecy.push("23:55:00", "⚖️", format!("Resolved conflict on '{}' with local changes (Ours)", file), ProphecyLevel::Jade);
+                                let remaining_conflicts = s.get_conflicted_files();
+                                if remaining_conflicts.is_empty() {
+                                    self.center_loom.rebase_crucible.clear_conflict();
+                                    self.center_loom.rebase_crucible.set_feedback("All conflicts resolved! Click '▶ CONTINUE REBASE' to resume.".into());
+                                } else {
+                                    let next_file = remaining_conflicts.first().cloned().unwrap_or_default();
+                                    let (ours, theirs) = s.get_conflict_contents(&next_file);
+                                    self.center_loom.rebase_crucible.conflict_file = next_file;
+                                    self.center_loom.rebase_crucible.conflict_ours = ours;
+                                    self.center_loom.rebase_crucible.conflict_theirs = theirs;
+                                    self.center_loom.rebase_crucible.conflicted_files = remaining_conflicts;
+                                }
+                                self.refresh_git_state();
+                            }
+                        }
                         Task::none()
                     }
                     RebaseMessage::ResolveConflictTheirs => {
-                        self.center_loom.rebase_crucible.has_conflict = false;
-                        self.bottom_prophecy.push("23:55:00", "⚖️", "Conflict resolved: Adopted incoming changes (Theirs)".into(), ProphecyLevel::Maya);
+                        let file = self.center_loom.rebase_crucible.conflict_file.clone();
+                        if let Some(ref s) = self.sanctuary {
+                            if let Err(e) = s.resolve_conflict_theirs(&file) {
+                                self.bottom_prophecy.push("23:55:00", "⚠️", format!("Failed resolving theirs for {}: {}", file, e), ProphecyLevel::Xibalba);
+                            } else {
+                                self.bottom_prophecy.push("23:55:00", "⚖️", format!("Resolved conflict on '{}' with incoming changes (Theirs)", file), ProphecyLevel::Maya);
+                                let remaining_conflicts = s.get_conflicted_files();
+                                if remaining_conflicts.is_empty() {
+                                    self.center_loom.rebase_crucible.clear_conflict();
+                                    self.center_loom.rebase_crucible.set_feedback("All conflicts resolved! Click '▶ CONTINUE REBASE' to resume.".into());
+                                } else {
+                                    let next_file = remaining_conflicts.first().cloned().unwrap_or_default();
+                                    let (ours, theirs) = s.get_conflict_contents(&next_file);
+                                    self.center_loom.rebase_crucible.conflict_file = next_file;
+                                    self.center_loom.rebase_crucible.conflict_ours = ours;
+                                    self.center_loom.rebase_crucible.conflict_theirs = theirs;
+                                    self.center_loom.rebase_crucible.conflicted_files = remaining_conflicts;
+                                }
+                                self.refresh_git_state();
+                            }
+                        }
                         Task::none()
                     }
                     RebaseMessage::ResolveConflictBoth => {
-                        self.center_loom.rebase_crucible.has_conflict = false;
-                        self.bottom_prophecy.push("23:55:00", "⚖️", "Conflict resolved: Synthesized both traditions".into(), ProphecyLevel::Solar);
+                        let file = self.center_loom.rebase_crucible.conflict_file.clone();
+                        if let Some(ref s) = self.sanctuary {
+                            if let Err(e) = s.resolve_conflict_both(&file) {
+                                self.bottom_prophecy.push("23:55:00", "⚠️", format!("Failed resolving both for {}: {}", file, e), ProphecyLevel::Xibalba);
+                            } else {
+                                self.bottom_prophecy.push("23:55:00", "⚖️", format!("Synthesized both versions on '{}'", file), ProphecyLevel::Solar);
+                                let remaining_conflicts = s.get_conflicted_files();
+                                if remaining_conflicts.is_empty() {
+                                    self.center_loom.rebase_crucible.clear_conflict();
+                                    self.center_loom.rebase_crucible.set_feedback("All conflicts resolved! Click '▶ CONTINUE REBASE' to resume.".into());
+                                } else {
+                                    let next_file = remaining_conflicts.first().cloned().unwrap_or_default();
+                                    let (ours, theirs) = s.get_conflict_contents(&next_file);
+                                    self.center_loom.rebase_crucible.conflict_file = next_file;
+                                    self.center_loom.rebase_crucible.conflict_ours = ours;
+                                    self.center_loom.rebase_crucible.conflict_theirs = theirs;
+                                    self.center_loom.rebase_crucible.conflicted_files = remaining_conflicts;
+                                }
+                                self.refresh_git_state();
+                            }
+                        }
+                        Task::none()
+                    }
+                    RebaseMessage::ContinueRebase => {
+                        let plan_steps: Vec<crate::git::RebasePlanStep> = self
+                            .center_loom
+                            .rebase_crucible
+                            .steps
+                            .iter()
+                            .map(|s| crate::git::RebasePlanStep {
+                                sha: s.sha.clone(),
+                                full_sha: s.full_sha.clone(),
+                                original_message: s.original_message.clone(),
+                                current_message: s.current_message.clone(),
+                                action: s.action,
+                            })
+                            .collect();
+                        let step_idx = self.center_loom.rebase_crucible.current_step;
+
+                        if let Some(ref s) = self.sanctuary {
+                            match s.continue_rebase_plan(step_idx, &plan_steps) {
+                                Ok(msg) => {
+                                    self.center_loom.rebase_crucible.reset_rebase();
+                                    self.center_loom.rebase_crucible.set_feedback(msg.clone());
+                                    self.refresh_git_state();
+                                    self.bottom_prophecy.push("23:55:00", "🔥", msg, ProphecyLevel::Solar);
+                                }
+                                Err(crate::git::RebaseError::Conflict {
+                                    conflicted_files,
+                                    step_index,
+                                    message,
+                                }) => {
+                                    let first_file = conflicted_files.first().cloned().unwrap_or_default();
+                                    let (ours, theirs) = s.get_conflict_contents(&first_file);
+                                    self.center_loom.rebase_crucible.set_conflict(
+                                        first_file.clone(),
+                                        ours,
+                                        theirs,
+                                        conflicted_files.clone(),
+                                        step_index,
+                                        message.clone(),
+                                    );
+                                    self.refresh_git_state();
+                                    self.bottom_prophecy.push(
+                                        "23:55:00",
+                                        "⚔️",
+                                        format!("Next conflict encountered on '{}' (step #{})", first_file, step_index + 1),
+                                        ProphecyLevel::Xibalba,
+                                    );
+                                }
+                                Err(crate::git::RebaseError::Fatal(e)) => {
+                                    self.center_loom.rebase_crucible.set_feedback(format!("Continue rebase failed: {}", e));
+                                    self.bottom_prophecy.push(
+                                        "23:55:00",
+                                        "⚠️",
+                                        format!("Continue rebase fatal error: {}", e),
+                                        ProphecyLevel::Xibalba,
+                                    );
+                                }
+                            }
+                        }
+                        Task::none()
+                    }
+                    RebaseMessage::AbortRebase => {
+                        if let Some(ref s) = self.sanctuary {
+                            match s.abort_rebase() {
+                                Ok(()) => {
+                                    self.center_loom.rebase_crucible.reset_rebase();
+                                    self.center_loom.rebase_crucible.set_feedback("Rebase aborted. Sovereign HEAD restored to ORIG_HEAD.".into());
+                                    self.refresh_git_state();
+                                    self.bottom_prophecy.push("23:55:00", "↩️", "Rebase ritual aborted — restored previous sanctuary state".into(), ProphecyLevel::Jade);
+                                }
+                                Err(e) => {
+                                    self.bottom_prophecy.push("23:55:00", "⚠️", format!("Failed aborting rebase: {}", e), ProphecyLevel::Xibalba);
+                                }
+                            }
+                        }
                         Task::none()
                     }
                 },
@@ -1222,6 +1476,8 @@ impl ItzamnaApp {
                         Task::done(Message::CenterLoom(CenterLoomMessage::Oracle(OracleMessage::RefreshTelemetry)))
                     } else if tab == CenterTab::CelestialWorkflows {
                         Task::done(Message::CenterLoom(CenterLoomMessage::Workflows(WorkflowMessage::RefreshRuns)))
+                    } else if tab == CenterTab::RebaseCrucible && self.center_loom.rebase_crucible.steps.is_empty() {
+                        Task::done(Message::CenterLoom(CenterLoomMessage::Rebase(RebaseMessage::LoadRebaseSteps)))
                     } else {
                         Task::none()
                     }
