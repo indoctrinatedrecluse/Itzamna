@@ -31,7 +31,6 @@ jobs:
           New-Item -ItemType Directory -Force -Path "dist/windows" | Out-Null
           Copy-Item "target/release/itzamna-desktop.exe" "dist/windows/"
           Copy-Item "itzamna-desktop/assets" "dist/windows/assets" -Recurse
-          if (Test-Path "ixchel.jar") { Copy-Item "ixchel.jar" "dist/windows/" }
           Compress-Archive -Path "dist/windows/*" -DestinationPath "dist/itzamna-windows-x86_64.zip"
 
       - name: Install Inno Setup

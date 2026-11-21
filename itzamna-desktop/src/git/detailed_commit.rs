@@ -50,7 +50,10 @@ impl DetailedCommit {
 
         let committer = commit.committer();
         let committer_name = committer.name().unwrap_or("Ahau").to_string();
-        let committer_email = committer.email().unwrap_or("unknown@itzamna.dev").to_string();
+        let committer_email = committer
+            .email()
+            .unwrap_or("unknown@itzamna.dev")
+            .to_string();
 
         let summary = commit.summary().unwrap_or("Sacred Inscription").to_string();
         let full_message = commit.message().unwrap_or(&summary).to_string();
@@ -65,13 +68,16 @@ impl DetailedCommit {
 
         if let Some(curr) = current_tree.as_ref() {
             let mut opts = DiffOptions::new();
-            if let Ok(diff) = repo.diff_tree_to_tree(parent_tree.as_ref(), Some(curr), Some(&mut opts)) {
+            if let Ok(diff) =
+                repo.diff_tree_to_tree(parent_tree.as_ref(), Some(curr), Some(&mut opts))
+            {
                 if let Ok(stats) = diff.stats() {
                     total_additions = stats.insertions();
                     total_deletions = stats.deletions();
                 }
 
-                let mut file_line_counts: std::collections::HashMap<String, (usize, usize)> = std::collections::HashMap::new();
+                let mut file_line_counts: std::collections::HashMap<String, (usize, usize)> =
+                    std::collections::HashMap::new();
                 let _ = diff.print(git2::DiffFormat::Patch, |delta, _hunk, line| {
                     let path = delta
                         .new_file()
@@ -105,7 +111,8 @@ impl DetailedCommit {
                         _ => "M",
                     };
 
-                    let (additions, deletions) = file_line_counts.get(&path).copied().unwrap_or((0, 0));
+                    let (additions, deletions) =
+                        file_line_counts.get(&path).copied().unwrap_or((0, 0));
 
                     changed_files.push(CommitFileChange {
                         path,
@@ -148,7 +155,11 @@ mod tests {
                 assert!(!detailed.sha.is_empty());
                 assert_eq!(detailed.short_sha.len(), 7);
                 assert!(!detailed.summary.is_empty());
-                println!("Inspected commit: {} (files: {})", detailed.short_sha, detailed.changed_files.len());
+                println!(
+                    "Inspected commit: {} (files: {})",
+                    detailed.short_sha,
+                    detailed.changed_files.len()
+                );
                 for f in &detailed.changed_files {
                     println!("  File {}: +{} -{}", f.path, f.additions, f.deletions);
                 }

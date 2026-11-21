@@ -79,18 +79,22 @@ impl AhauBlameWorkbench {
                 .on_input(|val| BlameMessage::FilePathChanged(val).into()),
             Space::new().width(6),
             tooltip(
-                button(text("🔍 Blame File").size(10).color(MayaColors::OBSIDIAN_VOID))
-                    .padding(Padding::from([3, 10]))
-                    .style(|_theme, _status| button::Style {
-                        background: Some(MayaColors::SOLAR_GOLD.into()),
-                        border: Border {
-                            color: MayaColors::SOLAR_AMBER,
-                            width: 1.0,
-                            radius: 3.0.into(),
-                        },
-                        ..Default::default()
-                    })
-                    .on_press(BlameMessage::ExecuteBlame.into()),
+                button(
+                    text("🔍 Blame File")
+                        .size(10)
+                        .color(MayaColors::OBSIDIAN_VOID)
+                )
+                .padding(Padding::from([3, 10]))
+                .style(|_theme, _status| button::Style {
+                    background: Some(MayaColors::SOLAR_GOLD.into()),
+                    border: Border {
+                        color: MayaColors::SOLAR_AMBER,
+                        width: 1.0,
+                        radius: 3.0.into(),
+                    },
+                    ..Default::default()
+                })
+                .on_press(BlameMessage::ExecuteBlame.into()),
                 text("Run line-by-line author attribution on file (git blame <path>)").size(11),
                 tooltip::Position::Bottom,
             ),
@@ -102,14 +106,22 @@ impl AhauBlameWorkbench {
             let err_banner = container(
                 row![
                     text("⚠️ ").size(12),
-                    text(format!("Blame failed: {}", err)).size(11).color(MayaColors::CINNABAR_BRIGHT),
+                    text(format!("Blame failed: {}", err))
+                        .size(11)
+                        .color(MayaColors::CINNABAR_BRIGHT),
                 ]
-                .align_y(Alignment::Center)
+                .align_y(Alignment::Center),
             )
             .padding(Padding::from([6, 12]))
             .width(Length::Fill)
             .style(|_theme| container::Style {
-                background: Some(Color { a: 0.35, ..MayaColors::CINNABAR_DARK }.into()),
+                background: Some(
+                    Color {
+                        a: 0.35,
+                        ..MayaColors::CINNABAR_DARK
+                    }
+                    .into(),
+                ),
                 ..Default::default()
             });
 
@@ -125,14 +137,20 @@ impl AhauBlameWorkbench {
             lines_column = lines_column.push(self.render_blame_row(line));
         }
 
-        let scroll_body = scrollable(lines_column.padding(Padding::from([6, 10])))
-            .height(Length::Fill);
+        let scroll_body =
+            scrollable(lines_column.padding(Padding::from([6, 10]))).height(Length::Fill);
 
         container(column![title_bar, scroll_body])
             .width(Length::Fill)
             .height(Length::Fill)
             .style(|_theme| container::Style {
-                background: Some(Color { a: 0.65, ..MayaColors::OBSIDIAN_BASE }.into()),
+                background: Some(
+                    Color {
+                        a: 0.65,
+                        ..MayaColors::OBSIDIAN_BASE
+                    }
+                    .into(),
+                ),
                 border: Border {
                     color: MayaColors::OBSIDIAN_BORDER,
                     width: 0.0,
@@ -172,18 +190,28 @@ impl AhauBlameWorkbench {
                     ..Default::default()
                 })
                 .on_press(BlameMessage::SelectCommitSha(line.commit_sha.clone()).into()),
-            text(format!("Inspect commit [{}] by {} ({})", line.short_sha, line.author_name, line.relative_time)).size(11),
+            text(format!(
+                "Inspect commit [{}] by {} ({})",
+                line.short_sha, line.author_name, line.relative_time
+            ))
+            .size(11),
             tooltip::Position::Right,
         );
 
         let gutter = row![
-            text(format!("{:>4}", line.line_no)).size(9).color(MayaColors::GLYPH_DIM),
+            text(format!("{:>4}", line.line_no))
+                .size(9)
+                .color(MayaColors::GLYPH_DIM),
             Space::new().width(6),
             sha_btn,
             Space::new().width(6),
-            text(format!("{:<14}", line.author_name)).size(9).color(MayaColors::STARLIGHT_WHITE),
+            text(format!("{:<14}", line.author_name))
+                .size(9)
+                .color(MayaColors::STARLIGHT_WHITE),
             Space::new().width(6),
-            text(format!("{:>7}", line.relative_time)).size(9).color(heat_color),
+            text(format!("{:>7}", line.relative_time))
+                .size(9)
+                .color(heat_color),
             Space::new().width(8),
             // Heat bar
             container(Space::new())
@@ -200,18 +228,20 @@ impl AhauBlameWorkbench {
             .size(10)
             .color(MayaColors::STARLIGHT_WHITE);
 
-        let full_row = row![
-            gutter,
-            Space::new().width(10),
-            code_text,
-        ]
-        .align_y(Alignment::Center)
-        .padding(Padding::from([1, 4]));
+        let full_row = row![gutter, Space::new().width(10), code_text,]
+            .align_y(Alignment::Center)
+            .padding(Padding::from([1, 4]));
 
         container(full_row)
             .width(Length::Fill)
             .style(|_theme| container::Style {
-                background: Some(Color { a: 0.15, ..MayaColors::OBSIDIAN_SURFACE }.into()),
+                background: Some(
+                    Color {
+                        a: 0.15,
+                        ..MayaColors::OBSIDIAN_SURFACE
+                    }
+                    .into(),
+                ),
                 ..Default::default()
             })
             .into()

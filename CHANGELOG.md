@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.3] - 2026-11-21
+
+### Added
+- Added an asynchronous GitHub Releases update check on startup and a themed **Check for Updates** button with release page access.
+- Added visible update status and a notification for available releases.
+- Added portable Windows package versioning aligned with the current application release.
+
+### Fixed
+- Consolidated release metadata and packaging script version strings for v0.1.3.
+- Kept release checks non-blocking, bounded by an eight-second timeout, and restricted release links to the official repository.
+
+### Changed
+- Removed duplicate root-level assets in favor of the desktop package assets.
+- Removed the obsolete synthetic Scala telemetry service in favor of local Git telemetry.
+- Expanded CI checks and release builds across Windows, Linux, and macOS.
+
+---
+
 ## [0.1.2] - 2026-11-03
 
 ### Added

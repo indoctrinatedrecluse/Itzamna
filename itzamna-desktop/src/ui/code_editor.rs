@@ -41,7 +41,14 @@ impl KatunEditor {
     }
 
     pub fn load_file(&mut self, path: String) -> Result<(), String> {
-        let text = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
+        let text = std::fs::read_to_string(&path).map_err(|e| {
+            if e.kind() == std::io::ErrorKind::InvalidData {
+                "This file is binary or is not valid UTF-8, so it cannot be opened as text."
+                    .to_string()
+            } else {
+                e.to_string()
+            }
+        })?;
         self.content = text_editor::Content::with_text(&text);
         self.file_path = Some(path.clone());
         self.is_modified = false;
@@ -94,7 +101,9 @@ impl KatunEditor {
                 None
             }
             EditorMessage::OpenFile(path) => {
-                let _ = self.load_file(path);
+                if let Err(error) = self.load_file(path) {
+                    self.status_message = Some(error);
+                }
                 None
             }
         }
@@ -129,16 +138,36 @@ impl KatunEditor {
             container(text("MODIFIED").size(8).color(MayaColors::SOLAR_AMBER))
                 .padding(Padding::from([1, 4]))
                 .style(|_| container::Style {
-                    background: Some(Color { a: 0.25, ..MayaColors::SOLAR_AMBER }.into()),
-                    border: Border { color: MayaColors::SOLAR_AMBER, width: 0.5, radius: 2.0.into() },
+                    background: Some(
+                        Color {
+                            a: 0.25,
+                            ..MayaColors::SOLAR_AMBER
+                        }
+                        .into(),
+                    ),
+                    border: Border {
+                        color: MayaColors::SOLAR_AMBER,
+                        width: 0.5,
+                        radius: 2.0.into(),
+                    },
                     ..Default::default()
                 })
         } else {
             container(text("SAVED").size(8).color(MayaColors::JADE_GLOW))
                 .padding(Padding::from([1, 4]))
                 .style(|_| container::Style {
-                    background: Some(Color { a: 0.25, ..MayaColors::JADE_GLOW }.into()),
-                    border: Border { color: MayaColors::JADE_GLOW, width: 0.5, radius: 2.0.into() },
+                    background: Some(
+                        Color {
+                            a: 0.25,
+                            ..MayaColors::JADE_GLOW
+                        }
+                        .into(),
+                    ),
+                    border: Border {
+                        color: MayaColors::JADE_GLOW,
+                        width: 0.5,
+                        radius: 2.0.into(),
+                    },
                     ..Default::default()
                 })
         };
@@ -157,7 +186,9 @@ impl KatunEditor {
                     row![
                         text("💾").size(10),
                         Space::new().width(4),
-                        text("Save (Ctrl+S)").size(10).color(MayaColors::STARLIGHT_WHITE),
+                        text("Save (Ctrl+S)")
+                            .size(10)
+                            .color(MayaColors::STARLIGHT_WHITE),
                     ]
                     .align_y(Alignment::Center)
                 )
@@ -169,7 +200,11 @@ impl KatunEditor {
                     };
                     button::Style {
                         background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
-                        border: Border { color: border_color, width: 1.0, radius: 3.0.into() },
+                        border: Border {
+                            color: border_color,
+                            width: 1.0,
+                            radius: 3.0.into(),
+                        },
                         ..Default::default()
                     }
                 })
@@ -195,7 +230,11 @@ impl KatunEditor {
                     };
                     button::Style {
                         background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
-                        border: Border { color: border_color, width: 1.0, radius: 3.0.into() },
+                        border: Border {
+                            color: border_color,
+                            width: 1.0,
+                            radius: 3.0.into(),
+                        },
                         ..Default::default()
                     }
                 })
@@ -238,7 +277,11 @@ impl KatunEditor {
             .on_action(|a| EditorMessage::Edit(a).into())
             .style(|_, _| text_editor::Style {
                 background: MayaColors::OBSIDIAN_VOID.into(),
-                border: Border { color: MayaColors::OBSIDIAN_BORDER, width: 1.0, radius: 0.0.into() },
+                border: Border {
+                    color: MayaColors::OBSIDIAN_BORDER,
+                    width: 1.0,
+                    radius: 0.0.into(),
+                },
                 placeholder: MayaColors::GLYPH_DIM,
                 value: MayaColors::STARLIGHT_WHITE,
                 selection: MayaColors::JADE_SHADOW,
@@ -252,31 +295,57 @@ impl KatunEditor {
         let status_left = if let Some(ref st) = self.status_message {
             text(st).size(9).color(MayaColors::JADE_GLOW)
         } else {
-            text("Sacred codex ready for scribing.").size(9).color(MayaColors::GLYPH_DIM)
+            text("Sacred codex ready for scribing.")
+                .size(9)
+                .color(MayaColors::GLYPH_DIM)
         };
 
         let status_bar = container(
             row![
                 status_left,
                 Space::new().width(Length::Fill),
-                container(text(format!("[{}]", syntax.to_uppercase())).size(8).color(MayaColors::SOLAR_GOLD))
-                    .padding(Padding::from([1, 4]))
-                    .style(|_| container::Style {
-                        background: Some(Color { a: 0.25, ..MayaColors::SOLAR_AMBER }.into()),
-                        border: Border { color: MayaColors::SOLAR_GOLD, width: 0.5, radius: 2.0.into() },
-                        ..Default::default()
-                    }),
+                container(
+                    text(format!("[{}]", syntax.to_uppercase()))
+                        .size(8)
+                        .color(MayaColors::SOLAR_GOLD)
+                )
+                .padding(Padding::from([1, 4]))
+                .style(|_| container::Style {
+                    background: Some(
+                        Color {
+                            a: 0.25,
+                            ..MayaColors::SOLAR_AMBER
+                        }
+                        .into()
+                    ),
+                    border: Border {
+                        color: MayaColors::SOLAR_GOLD,
+                        width: 0.5,
+                        radius: 2.0.into()
+                    },
+                    ..Default::default()
+                }),
                 Space::new().width(10),
-                text(format!("Ln {}, Col {}", cursor_line + 1, cursor_col + 1)).size(9).color(MayaColors::STARLIGHT_WHITE),
+                text(format!("Ln {}, Col {}", cursor_line + 1, cursor_col + 1))
+                    .size(9)
+                    .color(MayaColors::STARLIGHT_WHITE),
                 Space::new().width(10),
-                text(format!("{} lines", line_count)).size(9).color(MayaColors::PARCHMENT_MUTED),
+                text(format!("{} lines", line_count))
+                    .size(9)
+                    .color(MayaColors::PARCHMENT_MUTED),
             ]
             .padding(Padding::from([3, 10]))
-            .align_y(Alignment::Center)
+            .align_y(Alignment::Center),
         )
         .width(Length::Fill)
         .style(|_| container::Style {
-            background: Some(Color { a: 0.95, ..MayaColors::OBSIDIAN_BASE }.into()),
+            background: Some(
+                Color {
+                    a: 0.95,
+                    ..MayaColors::OBSIDIAN_BASE
+                }
+                .into(),
+            ),
             border: Border {
                 color: MayaColors::OBSIDIAN_BORDER,
                 width: 1.0,
@@ -289,8 +358,18 @@ impl KatunEditor {
             .width(Length::Fill)
             .height(Length::Fill)
             .style(|_| container::Style {
-                background: Some(Color { a: 0.94, ..MayaColors::OBSIDIAN_BASE }.into()),
-                border: Border { color: MayaColors::OBSIDIAN_BORDER, width: 1.0, radius: 0.0.into() },
+                background: Some(
+                    Color {
+                        a: 0.94,
+                        ..MayaColors::OBSIDIAN_BASE
+                    }
+                    .into(),
+                ),
+                border: Border {
+                    color: MayaColors::OBSIDIAN_BORDER,
+                    width: 1.0,
+                    radius: 0.0.into(),
+                },
                 ..Default::default()
             })
             .into()

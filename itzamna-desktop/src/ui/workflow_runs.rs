@@ -110,24 +110,54 @@ impl CelestialWorkflows {
 
     pub fn view<'a, Message: 'a + From<WorkflowMessage> + Clone>(&'a self) -> Element<'a, Message> {
         let header = row![
-            text("⚡ CELESTIAL WORKFLOWS & GITHUB CI/CD").size(13).color(MayaColors::SOLAR_GOLD),
+            text("⚡ CELESTIAL WORKFLOWS & GITHUB CI/CD")
+                .size(13)
+                .color(MayaColors::SOLAR_GOLD),
             Space::new().width(12),
             if self.is_gh_installed {
-                container(text("GH CLI CONNECTED").size(8).color(MayaColors::JADE_GLOW))
-                    .padding(Padding::from([2, 6]))
-                    .style(|_| container::Style {
-                        background: Some(Color { a: 0.25, ..MayaColors::JADE_GLOW }.into()),
-                        border: Border { color: MayaColors::JADE_GLOW, width: 0.5, radius: 2.0.into() },
-                        ..Default::default()
-                    })
+                container(
+                    text("GH CLI CONNECTED")
+                        .size(8)
+                        .color(MayaColors::JADE_GLOW),
+                )
+                .padding(Padding::from([2, 6]))
+                .style(|_| container::Style {
+                    background: Some(
+                        Color {
+                            a: 0.25,
+                            ..MayaColors::JADE_GLOW
+                        }
+                        .into(),
+                    ),
+                    border: Border {
+                        color: MayaColors::JADE_GLOW,
+                        width: 0.5,
+                        radius: 2.0.into(),
+                    },
+                    ..Default::default()
+                })
             } else {
-                container(text("GH CLI MISSING").size(8).color(MayaColors::CINNABAR_BRIGHT))
-                    .padding(Padding::from([2, 6]))
-                    .style(|_| container::Style {
-                        background: Some(Color { a: 0.25, ..MayaColors::CINNABAR_BRIGHT }.into()),
-                        border: Border { color: MayaColors::CINNABAR_BRIGHT, width: 0.5, radius: 2.0.into() },
-                        ..Default::default()
-                    })
+                container(
+                    text("GH CLI MISSING")
+                        .size(8)
+                        .color(MayaColors::CINNABAR_BRIGHT),
+                )
+                .padding(Padding::from([2, 6]))
+                .style(|_| container::Style {
+                    background: Some(
+                        Color {
+                            a: 0.25,
+                            ..MayaColors::CINNABAR_BRIGHT
+                        }
+                        .into(),
+                    ),
+                    border: Border {
+                        color: MayaColors::CINNABAR_BRIGHT,
+                        width: 0.5,
+                        radius: 2.0.into(),
+                    },
+                    ..Default::default()
+                })
             },
             Space::new().width(Length::Fill),
             mayan_tooltip(
@@ -135,7 +165,9 @@ impl CelestialWorkflows {
                     row![
                         text("🔄").size(11),
                         Space::new().width(4),
-                        text("Refresh Runs").size(10).color(MayaColors::STARLIGHT_WHITE),
+                        text("Refresh Runs")
+                            .size(10)
+                            .color(MayaColors::STARLIGHT_WHITE),
                     ]
                     .align_y(Alignment::Center)
                 )
@@ -147,7 +179,11 @@ impl CelestialWorkflows {
                     };
                     button::Style {
                         background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
-                        border: Border { color: border_color, width: 1.0, radius: 3.0.into() },
+                        border: Border {
+                            color: border_color,
+                            width: 1.0,
+                            radius: 3.0.into(),
+                        },
                         ..Default::default()
                     }
                 })
@@ -204,10 +240,16 @@ impl CelestialWorkflows {
                 ..Default::default()
             });
 
-            return container(column![header, container(prompt_card).center_x(Length::Fill).center_y(Length::Fill).height(Length::Fill)])
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .into();
+            return container(column![
+                header,
+                container(prompt_card)
+                    .center_x(Length::Fill)
+                    .center_y(Length::Fill)
+                    .height(Length::Fill)
+            ])
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into();
         }
 
         let mut list_col = column![].spacing(6).padding(Padding::from([6, 14]));
@@ -215,11 +257,13 @@ impl CelestialWorkflows {
         if self.runs.is_empty() {
             list_col = list_col.push(
                 container(
-                    text("No workflow runs retrieved yet. Click 'Refresh Runs' to awaken telemetry.")
-                        .size(11)
-                        .color(MayaColors::PARCHMENT_MUTED)
+                    text(
+                        "No workflow runs retrieved yet. Click 'Refresh Runs' to awaken telemetry.",
+                    )
+                    .size(11)
+                    .color(MayaColors::PARCHMENT_MUTED),
                 )
-                .padding(Padding::from(20))
+                .padding(Padding::from(20)),
             );
         } else {
             for r in &self.runs {
@@ -232,7 +276,11 @@ impl CelestialWorkflows {
                     _ => ("UNKNOWN", MayaColors::PARCHMENT_MUTED),
                 };
 
-                let short_sha = if r.head_sha.len() >= 7 { &r.head_sha[..7] } else { &r.head_sha };
+                let short_sha = if r.head_sha.len() >= 7 {
+                    &r.head_sha[..7]
+                } else {
+                    &r.head_sha
+                };
                 let url_clone = r.url.clone();
 
                 let run_card = container(
@@ -240,8 +288,18 @@ impl CelestialWorkflows {
                         container(text(badge_text).size(8).color(badge_color))
                             .padding(Padding::from([2, 6]))
                             .style(move |_| container::Style {
-                                background: Some(Color { a: 0.25, ..badge_color }.into()),
-                                border: Border { color: badge_color, width: 0.8, radius: 3.0.into() },
+                                background: Some(
+                                    Color {
+                                        a: 0.25,
+                                        ..badge_color
+                                    }
+                                    .into()
+                                ),
+                                border: Border {
+                                    color: badge_color,
+                                    width: 0.8,
+                                    radius: 3.0.into()
+                                },
                                 ..Default::default()
                             }),
                         Space::new().width(10),
@@ -249,15 +307,23 @@ impl CelestialWorkflows {
                             row![
                                 text(&r.name).size(12).color(MayaColors::STARLIGHT_WHITE),
                                 Space::new().width(8),
-                                text(format!("#{}", r.id)).size(9).color(MayaColors::GLYPH_DIM),
+                                text(format!("#{}", r.id))
+                                    .size(9)
+                                    .color(MayaColors::GLYPH_DIM),
                             ],
                             Space::new().height(2),
                             row![
-                                text(format!("Event: {}", r.event)).size(9).color(MayaColors::SOLAR_GOLD),
+                                text(format!("Event: {}", r.event))
+                                    .size(9)
+                                    .color(MayaColors::SOLAR_GOLD),
                                 text(" · ").size(9).color(MayaColors::GLYPH_DIM),
-                                text(format!("Branch: {}", r.head_branch)).size(9).color(MayaColors::JADE_GLOW),
+                                text(format!("Branch: {}", r.head_branch))
+                                    .size(9)
+                                    .color(MayaColors::JADE_GLOW),
                                 text(" · ").size(9).color(MayaColors::GLYPH_DIM),
-                                text(format!("SHA: {}", short_sha)).size(9).color(MayaColors::PARCHMENT_MUTED),
+                                text(format!("SHA: {}", short_sha))
+                                    .size(9)
+                                    .color(MayaColors::PARCHMENT_MUTED),
                                 text(" · ").size(9).color(MayaColors::GLYPH_DIM),
                                 text(&r.created_at).size(8).color(MayaColors::GLYPH_DIM),
                             ],
@@ -280,7 +346,11 @@ impl CelestialWorkflows {
                                 };
                                 button::Style {
                                     background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
-                                    border: Border { color: border_color, width: 0.8, radius: 3.0.into() },
+                                    border: Border {
+                                        color: border_color,
+                                        width: 0.8,
+                                        radius: 3.0.into(),
+                                    },
                                     ..Default::default()
                                 }
                             })
@@ -290,12 +360,22 @@ impl CelestialWorkflows {
                         ),
                     ]
                     .padding(Padding::from([8, 12]))
-                    .align_y(Alignment::Center)
+                    .align_y(Alignment::Center),
                 )
                 .width(Length::Fill)
                 .style(|_| container::Style {
-                    background: Some(Color { a: 0.88, ..MayaColors::OBSIDIAN_BASE }.into()),
-                    border: Border { color: MayaColors::OBSIDIAN_BORDER, width: 1.0, radius: 4.0.into() },
+                    background: Some(
+                        Color {
+                            a: 0.88,
+                            ..MayaColors::OBSIDIAN_BASE
+                        }
+                        .into(),
+                    ),
+                    border: Border {
+                        color: MayaColors::OBSIDIAN_BORDER,
+                        width: 1.0,
+                        radius: 4.0.into(),
+                    },
                     ..Default::default()
                 });
 
@@ -307,7 +387,13 @@ impl CelestialWorkflows {
             .width(Length::Fill)
             .height(Length::Fill)
             .style(|_| container::Style {
-                background: Some(Color { a: 0.92, ..MayaColors::OBSIDIAN_BASE }.into()),
+                background: Some(
+                    Color {
+                        a: 0.92,
+                        ..MayaColors::OBSIDIAN_BASE
+                    }
+                    .into(),
+                ),
                 ..Default::default()
             })
             .into()

@@ -1,7 +1,7 @@
 //! The Overseer Portals (Los Portales de los Vigilantes — Remote Operations Chamber)
 //! Manage Git remotes, Push, Push with Force-with-lease, Pull, and Remote Prune.
 
-use iced::widget::{button, column, container, row, text, tooltip, Space};
+use iced::widget::{button, column, container, progress_bar, row, text, tooltip, Space};
 use iced::{Alignment, Border, Color, Element, Length, Padding};
 
 use crate::theme::MayaColors;
@@ -11,8 +11,12 @@ pub enum PortalMessage {
     RemoteUrlChanged(String),
     PushSovereign,
     PushForceWithLease,
+    ConfirmForcePush,
+    CancelForcePush,
     PullRebase,
     FetchPrune,
+    OperationProgress(String),
+    OperationCompleted(Result<String, String>),
 }
 
 pub struct OverseerPortalsWorkbench {
@@ -20,6 +24,9 @@ pub struct OverseerPortalsWorkbench {
     pub new_remote_url: String,
     pub active_branch: String,
     pub last_action_report: Option<String>,
+    pub operation_running: bool,
+    pub confirm_force_push: bool,
+    pub progress_percent: Option<f32>,
 }
 
 impl Default for OverseerPortalsWorkbench {
@@ -35,6 +42,9 @@ impl OverseerPortalsWorkbench {
             new_remote_url: "".to_string(),
             active_branch,
             last_action_report: None,
+            operation_running: false,
+            confirm_force_push: false,
+            progress_percent: None,
         }
     }
 
@@ -48,27 +58,54 @@ impl OverseerPortalsWorkbench {
                 .size(11)
                 .color(MayaColors::SOLAR_GOLD),
             Space::new().width(12),
-            text(format!("{} Configured Portals · Active HEAD: '{}'", self.remotes.len(), self.active_branch))
-                .size(10)
-                .color(MayaColors::MAYA_BLUE),
+            text(format!(
+                "{} Configured Portals · Active HEAD: '{}'",
+                self.remotes.len(),
+                self.active_branch
+            ))
+            .size(10)
+            .color(MayaColors::MAYA_BLUE),
         ]
         .padding(Padding::from([6, 12]))
         .align_y(Alignment::Center);
 
         let report_banner = if let Some(ref rep) = self.last_action_report {
-            container(
-                row![
-                    text("⚡ ").size(11),
-                    text(rep).size(11).color(MayaColors::SOLAR_AMBER),
+            let content = if self.operation_running {
+                column![
+                    row![
+                        text("⚡ ").size(11),
+                        text(rep).size(11).color(MayaColors::SOLAR_AMBER)
+                    ]
+                    .align_y(Alignment::Center),
+                    row![
+                        progress_bar(0.0..=100.0, self.progress_percent.unwrap_or(0.0)),
+                        text(format!(" {:.0}%", self.progress_percent.unwrap_or(0.0)))
+                            .size(9)
+                            .color(MayaColors::MAYA_BLUE)
+                    ]
+                    .align_y(Alignment::Center),
                 ]
-                .align_y(Alignment::Center)
-            )
-            .padding(Padding::from([6, 12]))
-            .width(Length::Fill)
-            .style(|_theme| container::Style {
-                background: Some(Color { a: 0.35, ..MayaColors::OBSIDIAN_SURFACE }.into()),
-                ..Default::default()
-            })
+                .spacing(4)
+            } else {
+                column![row![
+                    text("⚡ ").size(11),
+                    text(rep).size(11).color(MayaColors::SOLAR_AMBER)
+                ]
+                .align_y(Alignment::Center)]
+            };
+            container(content)
+                .padding(Padding::from([6, 12]))
+                .width(Length::Fill)
+                .style(|_theme| container::Style {
+                    background: Some(
+                        Color {
+                            a: 0.35,
+                            ..MayaColors::OBSIDIAN_SURFACE
+                        }
+                        .into(),
+                    ),
+                    ..Default::default()
+                })
         } else {
             container(Space::new())
         };
@@ -76,12 +113,26 @@ impl OverseerPortalsWorkbench {
         let remotes_section = self.render_remotes_list();
         let actions_section = self.render_actions_grid();
 
+        let confirmation = if self.confirm_force_push {
+            container(column![
+                text("Confirm protected history rewrite").size(13).color(MayaColors::SOLAR_GOLD),
+                text(format!("Push '{}' with --force-with-lease? The remote update will be rejected if its current tip has changed.", self.active_branch)).size(11),
+                row![
+                    button(text("Cancel").size(10)).on_press(PortalMessage::CancelForcePush.into()),
+                    button(text("Push with lease").size(10)).on_press(PortalMessage::ConfirmForcePush.into()),
+                ].spacing(8),
+            ].spacing(10).padding(12))
+        } else {
+            container(Space::new())
+        };
+
         let body = column![
             report_banner,
             Space::new().height(8),
             remotes_section,
             Space::new().height(14),
             actions_section,
+            confirmation,
         ]
         .padding(Padding::from([8, 14]))
         .spacing(6);
@@ -90,7 +141,13 @@ impl OverseerPortalsWorkbench {
             .width(Length::Fill)
             .height(Length::Fill)
             .style(|_theme| container::Style {
-                background: Some(Color { a: 0.60, ..MayaColors::OBSIDIAN_BASE }.into()),
+                background: Some(
+                    Color {
+                        a: 0.60,
+                        ..MayaColors::OBSIDIAN_BASE
+                    }
+                    .into(),
+                ),
                 border: Border {
                     color: MayaColors::OBSIDIAN_BORDER,
                     width: 0.0,
@@ -101,11 +158,17 @@ impl OverseerPortalsWorkbench {
             .into()
     }
 
-    fn render_remotes_list<'a, Message: 'a + From<PortalMessage> + Clone>(&'a self) -> Element<'a, Message> {
+    fn render_remotes_list<'a, Message: 'a + From<PortalMessage> + Clone>(
+        &'a self,
+    ) -> Element<'a, Message> {
         let title = row![
-            text("☁️ RECOGNISED HORIZONS (REMOTES)").size(11).color(MayaColors::MAYA_BLUE),
+            text("☁️ RECOGNISED HORIZONS (REMOTES)")
+                .size(11)
+                .color(MayaColors::MAYA_BLUE),
             Space::new().width(8),
-            text("Configured remote repository endpoints").size(10).color(MayaColors::GLYPH_DIM),
+            text("Configured remote repository endpoints")
+                .size(10)
+                .color(MayaColors::GLYPH_DIM),
         ]
         .align_y(Alignment::Center);
 
@@ -122,58 +185,72 @@ impl OverseerPortalsWorkbench {
             .align_y(Alignment::Center)
             .padding(Padding::from([4, 8]));
 
-            list = list.push(
-                container(item)
-                    .width(Length::Fill)
-                    .style(|_theme| container::Style {
-                        background: Some(Color { a: 0.20, ..MayaColors::OBSIDIAN_SURFACE }.into()),
-                        border: Border {
-                            color: MayaColors::OBSIDIAN_BORDER,
-                            width: 1.0,
-                            radius: 3.0.into(),
-                        },
-                        ..Default::default()
-                    })
-            );
+            list = list.push(container(item).width(Length::Fill).style(|_theme| {
+                container::Style {
+                    background: Some(
+                        Color {
+                            a: 0.20,
+                            ..MayaColors::OBSIDIAN_SURFACE
+                        }
+                        .into(),
+                    ),
+                    border: Border {
+                        color: MayaColors::OBSIDIAN_BORDER,
+                        width: 1.0,
+                        radius: 3.0.into(),
+                    },
+                    ..Default::default()
+                }
+            }));
         }
 
-        container(
-            column![
-                title,
-                Space::new().height(6),
-                list,
-            ]
-            .padding(Padding::from([10, 14]))
-        )
-        .width(Length::Fill)
-        .style(|_theme| container::Style {
-            background: Some(Color { a: 0.35, ..MayaColors::OBSIDIAN_SURFACE }.into()),
-            border: Border {
-                color: MayaColors::OBSIDIAN_BORDER,
-                width: 1.0,
-                radius: 4.0.into(),
-            },
-            ..Default::default()
-        })
-        .into()
+        container(column![title, Space::new().height(6), list,].padding(Padding::from([10, 14])))
+            .width(Length::Fill)
+            .style(|_theme| container::Style {
+                background: Some(
+                    Color {
+                        a: 0.35,
+                        ..MayaColors::OBSIDIAN_SURFACE
+                    }
+                    .into(),
+                ),
+                border: Border {
+                    color: MayaColors::OBSIDIAN_BORDER,
+                    width: 1.0,
+                    radius: 4.0.into(),
+                },
+                ..Default::default()
+            })
+            .into()
     }
 
-    fn render_actions_grid<'a, Message: 'a + From<PortalMessage> + Clone>(&'a self) -> Element<'a, Message> {
+    fn render_actions_grid<'a, Message: 'a + From<PortalMessage> + Clone>(
+        &'a self,
+    ) -> Element<'a, Message> {
         let title = row![
-            text("⚡ CEREMONIAL ACTIONS").size(11).color(MayaColors::SOLAR_GOLD),
+            text("⚡ CEREMONIAL ACTIONS")
+                .size(11)
+                .color(MayaColors::SOLAR_GOLD),
             Space::new().width(8),
-            text("Synchronize with remote Git realms").size(10).color(MayaColors::GLYPH_DIM),
+            text("Synchronize with remote Git realms")
+                .size(10)
+                .color(MayaColors::GLYPH_DIM),
         ]
         .align_y(Alignment::Center);
 
         let push_btn = tooltip(
             button(
                 row![
-                    text("⬆️ PUSH HEAD").size(11).color(MayaColors::OBSIDIAN_VOID),
+                    text("⬆️ PUSH HEAD")
+                        .size(11)
+                        .color(MayaColors::OBSIDIAN_VOID),
                     Space::new().width(4),
-                    text("(git push)").size(9).color(Color { a: 0.8, ..MayaColors::OBSIDIAN_VOID }),
+                    text("(git push)").size(9).color(Color {
+                        a: 0.8,
+                        ..MayaColors::OBSIDIAN_VOID
+                    }),
                 ]
-                .align_y(Alignment::Center)
+                .align_y(Alignment::Center),
             )
             .padding(Padding::from([7, 14]))
             .style(|_theme, status| {
@@ -227,11 +304,13 @@ impl OverseerPortalsWorkbench {
         let pull_btn = tooltip(
             button(
                 row![
-                    text("⬇️ PULL & REBASE").size(11).color(MayaColors::STARLIGHT_WHITE),
+                    text("⬇️ PULL & REBASE")
+                        .size(11)
+                        .color(MayaColors::STARLIGHT_WHITE),
                     Space::new().width(4),
                     text("(git pull -r)").size(9).color(MayaColors::GLYPH_DIM),
                 ]
-                .align_y(Alignment::Center)
+                .align_y(Alignment::Center),
             )
             .padding(Padding::from([7, 14]))
             .style(|_theme, _status| button::Style {
@@ -244,7 +323,8 @@ impl OverseerPortalsWorkbench {
                 ..Default::default()
             })
             .on_press(PortalMessage::PullRebase.into()),
-            text("Fetch remote commits and rebase current branch onto remote tracking branch").size(11),
+            text("Fetch remote commits and rebase current branch onto remote tracking branch")
+                .size(11),
             tooltip::Position::Top,
         );
 
@@ -282,16 +362,17 @@ impl OverseerPortalsWorkbench {
         .align_y(Alignment::Center);
 
         container(
-            column![
-                title,
-                Space::new().height(10),
-                action_row,
-            ]
-            .padding(Padding::from([10, 14]))
+            column![title, Space::new().height(10), action_row,].padding(Padding::from([10, 14])),
         )
         .width(Length::Fill)
         .style(|_theme| container::Style {
-            background: Some(Color { a: 0.35, ..MayaColors::OBSIDIAN_SURFACE }.into()),
+            background: Some(
+                Color {
+                    a: 0.35,
+                    ..MayaColors::OBSIDIAN_SURFACE
+                }
+                .into(),
+            ),
             border: Border {
                 color: MayaColors::OBSIDIAN_BORDER,
                 width: 1.0,

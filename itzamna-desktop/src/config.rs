@@ -10,7 +10,6 @@ pub struct AppConfig {
     pub active_repo_path: Option<String>,
     pub background_mode: String, // "video", "procedural", "stealth"
     pub recent_repos: Vec<String>,
-    pub auto_fetch_interval_secs: u32,
 }
 
 impl Default for AppConfig {
@@ -19,15 +18,15 @@ impl Default for AppConfig {
             active_repo_path: Some(".".to_string()),
             background_mode: "video".to_string(),
             recent_repos: vec![".".to_string()],
-            auto_fetch_interval_secs: 300,
         }
     }
 }
 
 impl AppConfig {
     pub fn config_path() -> PathBuf {
-        let base = dirs_or_fallback();
-        base.join("Itzamna").join("config.toml")
+        directories::ProjectDirs::from("org", "Itzamna", "Itzamna")
+            .map(|dirs| dirs.config_dir().join("config.toml"))
+            .unwrap_or_else(|| PathBuf::from(".itzamna").join("config.toml"))
     }
 
     pub fn load() -> Self {
@@ -58,15 +57,5 @@ impl AppConfig {
         }
         self.active_repo_path = Some(path);
         let _ = self.save();
-    }
-}
-
-fn dirs_or_fallback() -> PathBuf {
-    if let Ok(app_data) = std::env::var("APPDATA") {
-        PathBuf::from(app_data)
-    } else if let Ok(home) = std::env::var("USERPROFILE").or_else(|_| std::env::var("HOME")) {
-        PathBuf::from(home).join(".config")
-    } else {
-        PathBuf::from(".")
     }
 }

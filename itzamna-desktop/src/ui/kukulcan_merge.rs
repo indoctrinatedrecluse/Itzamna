@@ -62,14 +62,22 @@ impl KukulcanMergeWorkbench {
         .align_y(Alignment::Center);
 
         let feedback_view = if let Some((ref msg, is_success)) = self.status_feedback {
-            let color = if is_success { MayaColors::JADE_GLOW } else { MayaColors::CINNABAR_BRIGHT };
-            let bg = if is_success { MayaColors::JADE_SHADOW } else { MayaColors::CINNABAR_DARK };
+            let color = if is_success {
+                MayaColors::JADE_GLOW
+            } else {
+                MayaColors::CINNABAR_BRIGHT
+            };
+            let bg = if is_success {
+                MayaColors::JADE_SHADOW
+            } else {
+                MayaColors::CINNABAR_DARK
+            };
             container(
                 row![
                     text(if is_success { "✨ " } else { "⚠️ " }).size(11),
                     text(msg).size(11).color(color),
                 ]
-                .align_y(Alignment::Center)
+                .align_y(Alignment::Center),
             )
             .padding(Padding::from([6, 12]))
             .width(Length::Fill)
@@ -101,7 +109,13 @@ impl KukulcanMergeWorkbench {
             .width(Length::Fill)
             .height(Length::Fill)
             .style(|_theme| container::Style {
-                background: Some(Color { a: 0.60, ..MayaColors::OBSIDIAN_BASE }.into()),
+                background: Some(
+                    Color {
+                        a: 0.60,
+                        ..MayaColors::OBSIDIAN_BASE
+                    }
+                    .into(),
+                ),
                 border: Border {
                     color: MayaColors::OBSIDIAN_BORDER,
                     width: 0.0,
@@ -112,65 +126,112 @@ impl KukulcanMergeWorkbench {
             .into()
     }
 
-    fn render_merge_section<'a, Message: 'a + From<MergeMessage> + Clone>(&'a self) -> Element<'a, Message> {
+    fn render_merge_section<'a, Message: 'a + From<MergeMessage> + Clone>(
+        &'a self,
+    ) -> Element<'a, Message> {
         let section_title = row![
-            text("🏺 MERGE CONFLUENCE RITUAL").size(11).color(MayaColors::SOLAR_GOLD),
+            text("🏺 MERGE CONFLUENCE RITUAL")
+                .size(11)
+                .color(MayaColors::SOLAR_GOLD),
             Space::new().width(8),
-            text("Meld branch lineage into sovereign HEAD").size(10).color(MayaColors::GLYPH_DIM),
+            text("Meld branch lineage into sovereign HEAD")
+                .size(10)
+                .color(MayaColors::GLYPH_DIM),
         ]
         .align_y(Alignment::Center);
 
         // Branch selection pills
-        let mut branch_selector = row![
-            text("Source Branch:").size(10).color(MayaColors::STARLIGHT_WHITE)
-        ].spacing(4).align_y(Alignment::Center);
+        let mut branch_selector = row![text("Source Branch:")
+            .size(10)
+            .color(MayaColors::STARLIGHT_WHITE)]
+        .spacing(4)
+        .align_y(Alignment::Center);
 
         for b in &self.available_branches {
-            if b == &self.active_head_branch { continue; }
+            if b == &self.active_head_branch {
+                continue;
+            }
             let is_sel = self.selected_target_branch.as_ref() == Some(b);
             let b_clone = b.clone();
-            let pill = button(text(b).size(10).color(if is_sel { MayaColors::OBSIDIAN_VOID } else { MayaColors::STARLIGHT_WHITE }))
-                .padding(Padding::from([2, 6]))
-                .style(move |_theme, _status| button::Style {
-                    background: Some(if is_sel { MayaColors::JADE_GLOW.into() } else { MayaColors::OBSIDIAN_SURFACE.into() }),
-                    border: Border {
-                        color: if is_sel { MayaColors::JADE_GLOW } else { MayaColors::OBSIDIAN_BORDER },
-                        width: 1.0,
-                        radius: 3.0.into(),
+            let pill = button(text(b).size(10).color(if is_sel {
+                MayaColors::OBSIDIAN_VOID
+            } else {
+                MayaColors::STARLIGHT_WHITE
+            }))
+            .padding(Padding::from([2, 6]))
+            .style(move |_theme, _status| button::Style {
+                background: Some(if is_sel {
+                    MayaColors::JADE_GLOW.into()
+                } else {
+                    MayaColors::OBSIDIAN_SURFACE.into()
+                }),
+                border: Border {
+                    color: if is_sel {
+                        MayaColors::JADE_GLOW
+                    } else {
+                        MayaColors::OBSIDIAN_BORDER
                     },
-                    ..Default::default()
-                })
-                .on_press(MergeMessage::SelectBranch(b_clone).into());
+                    width: 1.0,
+                    radius: 3.0.into(),
+                },
+                ..Default::default()
+            })
+            .on_press(MergeMessage::SelectBranch(b_clone).into());
 
             branch_selector = branch_selector.push(pill);
         }
 
         // Strategy Selector
         let strategy_row = row![
-            text("Strategy:").size(10).color(MayaColors::STARLIGHT_WHITE),
+            text("Strategy:")
+                .size(10)
+                .color(MayaColors::STARLIGHT_WHITE),
             Space::new().width(4),
-            self.strategy_button(MergeStrategy::FastForward, "FAST-FORWARD (--ff)", "Fast-forward if linear history"),
-            self.strategy_button(MergeStrategy::NoFastForward, "MERGE COMMIT (--no-ff)", "Always produce explicit merge commit"),
-            self.strategy_button(MergeStrategy::Squash, "SQUASH (--squash)", "Condense all incoming commits into 1 single change"),
+            self.strategy_button(
+                MergeStrategy::FastForward,
+                "FAST-FORWARD (--ff)",
+                "Fast-forward if linear history"
+            ),
+            self.strategy_button(
+                MergeStrategy::NoFastForward,
+                "MERGE COMMIT (--no-ff)",
+                "Always produce explicit merge commit"
+            ),
+            self.strategy_button(
+                MergeStrategy::Squash,
+                "SQUASH (--squash)",
+                "Condense all incoming commits into 1 single change"
+            ),
         ]
         .spacing(4)
         .align_y(Alignment::Center);
 
-        let target_name = self.selected_target_branch.clone().unwrap_or_else(|| "None selected".to_string());
+        let target_name = self
+            .selected_target_branch
+            .clone()
+            .unwrap_or_else(|| "None selected".to_string());
         let execute_btn = tooltip(
-            button(text(format!("🔥 CONSECRATE MERGE ({})", target_name)).size(11).color(MayaColors::OBSIDIAN_VOID))
-                .padding(Padding::from([6, 14]))
-                .style(|_theme, _status| button::Style {
-                    background: Some(MayaColors::SOLAR_GOLD.into()),
-                    border: Border {
-                        color: MayaColors::SOLAR_AMBER,
-                        width: 1.0,
-                        radius: 4.0.into(),
-                    },
-                    ..Default::default()
-                })
-                .on_press(MergeMessage::ExecuteMerge.into()),
-            text(format!("Merge '{}' into current branch '{}' using selected strategy", target_name, self.active_head_branch)).size(11),
+            button(
+                text(format!("🔥 CONSECRATE MERGE ({})", target_name))
+                    .size(11)
+                    .color(MayaColors::OBSIDIAN_VOID),
+            )
+            .padding(Padding::from([6, 14]))
+            .style(|_theme, _status| button::Style {
+                background: Some(MayaColors::SOLAR_GOLD.into()),
+                border: Border {
+                    color: MayaColors::SOLAR_AMBER,
+                    width: 1.0,
+                    radius: 4.0.into(),
+                },
+                ..Default::default()
+            })
+            .on_press(MergeMessage::ExecuteMerge.into()),
+            text(format!(
+                "Merge '{}' into current branch '{}' using selected strategy",
+                target_name, self.active_head_branch
+            ))
+            .size(11),
             tooltip::Position::Top,
         );
 
@@ -185,11 +246,17 @@ impl KukulcanMergeWorkbench {
                 execute_btn,
             ]
             .spacing(4)
-            .padding(Padding::from([12, 16]))
+            .padding(Padding::from([12, 16])),
         )
         .width(Length::Fill)
         .style(|_theme| container::Style {
-            background: Some(Color { a: 0.35, ..MayaColors::OBSIDIAN_SURFACE }.into()),
+            background: Some(
+                Color {
+                    a: 0.35,
+                    ..MayaColors::OBSIDIAN_SURFACE
+                }
+                .into(),
+            ),
             border: Border {
                 color: MayaColors::OBSIDIAN_BORDER,
                 width: 1.0,
@@ -208,9 +275,17 @@ impl KukulcanMergeWorkbench {
     ) -> Element<'a, Message> {
         let is_sel = self.strategy == strat;
         let (bg, txt, border) = if is_sel {
-            (MayaColors::SOLAR_AMBER, MayaColors::OBSIDIAN_VOID, MayaColors::SOLAR_GOLD)
+            (
+                MayaColors::SOLAR_AMBER,
+                MayaColors::OBSIDIAN_VOID,
+                MayaColors::SOLAR_GOLD,
+            )
         } else {
-            (MayaColors::OBSIDIAN_SURFACE, MayaColors::GLYPH_DIM, MayaColors::OBSIDIAN_BORDER)
+            (
+                MayaColors::OBSIDIAN_SURFACE,
+                MayaColors::GLYPH_DIM,
+                MayaColors::OBSIDIAN_BORDER,
+            )
         };
 
         let btn = button(text(label).size(9).color(txt))
@@ -229,11 +304,17 @@ impl KukulcanMergeWorkbench {
         tooltip(btn, text(desc).size(11), tooltip::Position::Top).into()
     }
 
-    fn render_cherry_pick_section<'a, Message: 'a + From<MergeMessage> + Clone>(&'a self) -> Element<'a, Message> {
+    fn render_cherry_pick_section<'a, Message: 'a + From<MergeMessage> + Clone>(
+        &'a self,
+    ) -> Element<'a, Message> {
         let section_title = row![
-            text("🍒 CHERRY-PICK ALTAR").size(11).color(MayaColors::CINNABAR_BRIGHT),
+            text("🍒 CHERRY-PICK ALTAR")
+                .size(11)
+                .color(MayaColors::CINNABAR_BRIGHT),
             Space::new().width(8),
-            text("Pluck an individual commit seal into active HEAD").size(10).color(MayaColors::GLYPH_DIM),
+            text("Pluck an individual commit seal into active HEAD")
+                .size(10)
+                .color(MayaColors::GLYPH_DIM),
         ]
         .align_y(Alignment::Center);
 
@@ -276,17 +357,19 @@ impl KukulcanMergeWorkbench {
         .align_y(Alignment::Center);
 
         container(
-            column![
-                section_title,
-                Space::new().height(6),
-                input_row,
-            ]
-            .spacing(4)
-            .padding(Padding::from([12, 16]))
+            column![section_title, Space::new().height(6), input_row,]
+                .spacing(4)
+                .padding(Padding::from([12, 16])),
         )
         .width(Length::Fill)
         .style(|_theme| container::Style {
-            background: Some(Color { a: 0.35, ..MayaColors::OBSIDIAN_SURFACE }.into()),
+            background: Some(
+                Color {
+                    a: 0.35,
+                    ..MayaColors::OBSIDIAN_SURFACE
+                }
+                .into(),
+            ),
             border: Border {
                 color: MayaColors::OBSIDIAN_BORDER,
                 width: 1.0,

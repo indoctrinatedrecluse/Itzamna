@@ -31,7 +31,10 @@ pub struct DiffHunk {
 impl DiffHunk {
     /// Formats this hunk into an exact unified diff patch accepted by `git apply`
     pub fn to_patch(&self, file_path: &str) -> String {
-        let mut patch = format!("--- a/{}\n+++ b/{}\n{}\n", file_path, file_path, self.header);
+        let mut patch = format!(
+            "--- a/{}\n+++ b/{}\n{}\n",
+            file_path, file_path, self.header
+        );
         for line in &self.lines {
             let prefix = match line.tag {
                 DiffLineTag::Context => " ",
@@ -60,15 +63,27 @@ impl DiffEngine {
         let text_diff = TextDiff::from_lines(old_text, new_text);
         let mut hunks = Vec::new();
 
-        for (_idx, group) in text_diff.grouped_ops(3).into_iter().enumerate() {
+        for group in text_diff.grouped_ops(3) {
             let mut lines = Vec::new();
 
-            let old_start = group.first().map(|op| op.old_range().start + 1).unwrap_or(1);
-            let old_end = group.last().map(|op| op.old_range().end).unwrap_or(old_start);
+            let old_start = group
+                .first()
+                .map(|op| op.old_range().start + 1)
+                .unwrap_or(1);
+            let old_end = group
+                .last()
+                .map(|op| op.old_range().end)
+                .unwrap_or(old_start);
             let old_lines = old_end.saturating_sub(old_start.saturating_sub(1));
 
-            let new_start = group.first().map(|op| op.new_range().start + 1).unwrap_or(1);
-            let new_end = group.last().map(|op| op.new_range().end).unwrap_or(new_start);
+            let new_start = group
+                .first()
+                .map(|op| op.new_range().start + 1)
+                .unwrap_or(1);
+            let new_end = group
+                .last()
+                .map(|op| op.new_range().end)
+                .unwrap_or(new_start);
             let new_lines = new_end.saturating_sub(new_start.saturating_sub(1));
 
             let mut old_lineno = old_start;
@@ -108,7 +123,10 @@ impl DiffEngine {
             }
 
             hunks.push(DiffHunk {
-                header: format!("@@ -{},{} +{},{} @@", old_start, old_lines, new_start, new_lines),
+                header: format!(
+                    "@@ -{},{} +{},{} @@",
+                    old_start, old_lines, new_start, new_lines
+                ),
                 old_start,
                 old_lines,
                 new_start,
@@ -138,10 +156,19 @@ mod tests {
 
         assert_eq!(diff.old_path, "src/main.rs");
         assert_eq!(diff.new_path, "src/main.rs");
-        assert!(!diff.hunks.is_empty(), "Hunks should be generated for differences");
+        assert!(
+            !diff.hunks.is_empty(),
+            "Hunks should be generated for differences"
+        );
 
-        let has_addition = diff.hunks.iter().any(|h| h.lines.iter().any(|l| l.tag == DiffLineTag::Addition));
-        let has_deletion = diff.hunks.iter().any(|h| h.lines.iter().any(|l| l.tag == DiffLineTag::Deletion));
+        let has_addition = diff
+            .hunks
+            .iter()
+            .any(|h| h.lines.iter().any(|l| l.tag == DiffLineTag::Addition));
+        let has_deletion = diff
+            .hunks
+            .iter()
+            .any(|h| h.lines.iter().any(|l| l.tag == DiffLineTag::Deletion));
         assert!(has_addition, "Should contain addition line");
         assert!(has_deletion, "Should contain deletion line");
     }
@@ -153,8 +180,14 @@ mod tests {
         let diff = DiffEngine::compute_diff(old, new, "src/calendar.rs");
 
         assert!(!diff.hunks.is_empty());
-        let all_additions = diff.hunks[0].lines.iter().all(|l| l.tag == DiffLineTag::Addition);
-        assert!(all_additions, "All lines should be additions when starting from empty");
+        let all_additions = diff.hunks[0]
+            .lines
+            .iter()
+            .all(|l| l.tag == DiffLineTag::Addition);
+        assert!(
+            all_additions,
+            "All lines should be additions when starting from empty"
+        );
     }
 
     #[test]

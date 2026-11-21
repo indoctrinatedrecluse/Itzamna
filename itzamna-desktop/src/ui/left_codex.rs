@@ -3,6 +3,7 @@
 
 use iced::widget::{button, column, container, row, scrollable, text, text_input, Space};
 use iced::{Alignment, Border, Color, Element, Length, Padding};
+use std::collections::{BTreeSet, HashSet};
 
 use crate::theme::MayaColors;
 use crate::ui::tooltip::{mayan_tooltip, Position};
@@ -31,6 +32,7 @@ pub enum LeftCodexMessage {
 
     // File Manager / Editor
     OpenFileInEditor(String),
+    ToggleWorkspaceFolder(String),
     OpenFolderDialog,
 
     // Multi-Repo and Genesis Rituals
@@ -54,6 +56,7 @@ pub struct LeftCodex {
     pub current_repo_path: String,
     pub recent_repos: Vec<String>,
     pub workspace_files: Vec<String>,
+    pub expanded_workspace_folders: HashSet<String>,
     pub is_repo_dropdown_open: bool,
     pub is_clone_modal_open: bool,
     pub clone_url_input: String,
@@ -87,6 +90,7 @@ impl LeftCodex {
             current_repo_path: ".".to_string(),
             recent_repos: vec![".".to_string()],
             workspace_files: Vec::new(),
+            expanded_workspace_folders: HashSet::new(),
             is_repo_dropdown_open: false,
             is_clone_modal_open: false,
             clone_url_input: "".to_string(),
@@ -106,7 +110,9 @@ impl LeftCodex {
         }
     }
 
-    pub fn view<'a, Message: 'a + From<LeftCodexMessage> + Clone>(&'a self) -> Element<'a, Message> {
+    pub fn view<'a, Message: 'a + From<LeftCodexMessage> + Clone>(
+        &'a self,
+    ) -> Element<'a, Message> {
         if self.is_collapsed {
             return container(
                 button(text("▶").size(14).color(MayaColors::SOLAR_GOLD))
@@ -127,9 +133,7 @@ impl LeftCodex {
         }
 
         let header = row![
-            text("📜 EL CÓDICE")
-                .size(13)
-                .color(MayaColors::SOLAR_GOLD),
+            text("📜 EL CÓDICE").size(13).color(MayaColors::SOLAR_GOLD),
             Space::new().width(Length::Fill),
             button(text("◀").size(11).color(MayaColors::GLYPH_DIM))
                 .padding(Padding::from([2, 6]))
@@ -152,24 +156,58 @@ impl LeftCodex {
         let repo_section = self.render_repo_section();
 
         let mode_switcher = row![
-            button(
-                text("🌿 Glyphs").size(10).color(if self.view_mode == CodexViewMode::GitGlyphs { MayaColors::SOLAR_GOLD } else { MayaColors::PARCHMENT_MUTED })
-            )
+            button(text("🌿 Glyphs").size(10).color(
+                if self.view_mode == CodexViewMode::GitGlyphs {
+                    MayaColors::SOLAR_GOLD
+                } else {
+                    MayaColors::PARCHMENT_MUTED
+                }
+            ))
             .padding(Padding::from([2, 8]))
             .style(|_, _| button::Style {
-                background: Some(if self.view_mode == CodexViewMode::GitGlyphs { MayaColors::OBSIDIAN_SURFACE.into() } else { Color::TRANSPARENT.into() }),
-                border: Border { color: if self.view_mode == CodexViewMode::GitGlyphs { MayaColors::SOLAR_GOLD } else { MayaColors::OBSIDIAN_BORDER }, width: 1.0, radius: 3.0.into() },
+                background: Some(if self.view_mode == CodexViewMode::GitGlyphs {
+                    MayaColors::OBSIDIAN_SURFACE.into()
+                } else {
+                    Color::TRANSPARENT.into()
+                }),
+                border: Border {
+                    color: if self.view_mode == CodexViewMode::GitGlyphs {
+                        MayaColors::SOLAR_GOLD
+                    } else {
+                        MayaColors::OBSIDIAN_BORDER
+                    },
+                    width: 1.0,
+                    radius: 3.0.into()
+                },
                 ..Default::default()
             })
             .on_press(LeftCodexMessage::ToggleViewMode(CodexViewMode::GitGlyphs).into()),
             Space::new().width(4),
             button(
-                text(format!("📁 Relics ({})", self.workspace_files.len())).size(10).color(if self.view_mode == CodexViewMode::WorkspaceRelics { MayaColors::JADE_GLOW } else { MayaColors::PARCHMENT_MUTED })
+                text(format!("📁 Relics ({})", self.workspace_files.len()))
+                    .size(10)
+                    .color(if self.view_mode == CodexViewMode::WorkspaceRelics {
+                        MayaColors::JADE_GLOW
+                    } else {
+                        MayaColors::PARCHMENT_MUTED
+                    })
             )
             .padding(Padding::from([2, 8]))
             .style(|_, _| button::Style {
-                background: Some(if self.view_mode == CodexViewMode::WorkspaceRelics { MayaColors::OBSIDIAN_SURFACE.into() } else { Color::TRANSPARENT.into() }),
-                border: Border { color: if self.view_mode == CodexViewMode::WorkspaceRelics { MayaColors::JADE_GLOW } else { MayaColors::OBSIDIAN_BORDER }, width: 1.0, radius: 3.0.into() },
+                background: Some(if self.view_mode == CodexViewMode::WorkspaceRelics {
+                    MayaColors::OBSIDIAN_SURFACE.into()
+                } else {
+                    Color::TRANSPARENT.into()
+                }),
+                border: Border {
+                    color: if self.view_mode == CodexViewMode::WorkspaceRelics {
+                        MayaColors::JADE_GLOW
+                    } else {
+                        MayaColors::OBSIDIAN_BORDER
+                    },
+                    width: 1.0,
+                    radius: 3.0.into()
+                },
                 ..Default::default()
             })
             .on_press(LeftCodexMessage::ToggleViewMode(CodexViewMode::WorkspaceRelics).into()),
@@ -217,7 +255,13 @@ impl LeftCodex {
             .width(260)
             .height(Length::Fill)
             .style(|_theme| container::Style {
-                background: Some(Color { a: 0.94, ..MayaColors::OBSIDIAN_BASE }.into()),
+                background: Some(
+                    Color {
+                        a: 0.94,
+                        ..MayaColors::OBSIDIAN_BASE
+                    }
+                    .into(),
+                ),
                 border: Border {
                     color: MayaColors::OBSIDIAN_BORDER,
                     width: 1.0,
@@ -228,11 +272,17 @@ impl LeftCodex {
             .into()
     }
 
-    fn render_workspace_relics<'a, Message: 'a + From<LeftCodexMessage> + Clone>(&'a self) -> Element<'a, Message> {
+    fn render_workspace_relics<'a, Message: 'a + From<LeftCodexMessage> + Clone>(
+        &'a self,
+    ) -> Element<'a, Message> {
         let title_row = row![
-            text("WORKSPACE RELICS (FILES)").size(10).color(MayaColors::JADE_GLOW),
+            text("WORKSPACE RELICS (FILES)")
+                .size(10)
+                .color(MayaColors::JADE_GLOW),
             Space::new().width(Length::Fill),
-            text(format!("{} items", self.workspace_files.len())).size(8).color(MayaColors::GLYPH_DIM),
+            text(format!("{} items", self.workspace_files.len()))
+                .size(8)
+                .color(MayaColors::GLYPH_DIM),
         ]
         .align_y(Alignment::Center);
 
@@ -240,73 +290,110 @@ impl LeftCodex {
 
         if self.workspace_files.is_empty() {
             files_list = files_list.push(
-                text("No files indexed in sanctuary").size(9).color(MayaColors::GLYPH_DIM)
+                text("No files indexed in sanctuary")
+                    .size(9)
+                    .color(MayaColors::GLYPH_DIM),
             );
         } else {
-            for file_path in &self.workspace_files {
-                let icon = if file_path.ends_with(".rs") {
-                    "🦀"
-                } else if file_path.ends_with(".md") || file_path.ends_with(".txt") {
-                    "📝"
-                } else if file_path.ends_with(".toml") || file_path.ends_with(".json") || file_path.ends_with(".yaml") || file_path.ends_with(".yml") {
-                    "⚙️"
-                } else if file_path.ends_with(".iss") || file_path.ends_with(".ps1") || file_path.ends_with(".sh") {
-                    "📜"
-                } else {
-                    "📄"
-                };
-
-                let path_clone = file_path.clone();
-                let file_btn = mayan_tooltip(
-                    button(
-                        row![
-                            text(icon).size(10),
-                            Space::new().width(6),
-                            text(file_path).size(9).color(MayaColors::STARLIGHT_WHITE),
-                        ]
-                        .align_y(Alignment::Center)
-                    )
-                    .width(Length::Fill)
-                    .padding(Padding::from([3, 6]))
-                    .style(|_, status| {
-                        let (bg, border) = match status {
-                            button::Status::Hovered => (
-                                Color { a: 0.35, ..MayaColors::OBSIDIAN_SURFACE },
-                                MayaColors::SOLAR_GOLD,
-                            ),
-                            _ => (
-                                Color::TRANSPARENT,
-                                Color::TRANSPARENT,
-                            ),
-                        };
-                        button::Style {
-                            background: Some(bg.into()),
-                            border: Border { color: border, width: 0.8, radius: 2.0.into() },
-                            ..Default::default()
-                        }
-                    })
-                    .on_press(LeftCodexMessage::OpenFileInEditor(path_clone).into()),
-                    "Awaken file in the K'atun Code Editor to edit and commit",
-                    iced::widget::tooltip::Position::Right,
-                );
-
-                files_list = files_list.push(file_btn);
+            for row in self.render_workspace_tree_rows("", 0) {
+                files_list = files_list.push(row);
             }
         }
 
         files_list.into()
     }
 
-    fn render_repo_section<'a, Message: 'a + From<LeftCodexMessage> + Clone>(&'a self) -> Element<'a, Message> {
+    fn render_workspace_tree_rows<'a, Message: 'a + From<LeftCodexMessage> + Clone>(
+        &'a self,
+        parent: &str,
+        depth: usize,
+    ) -> Vec<Element<'a, Message>> {
+        let mut children = BTreeSet::new();
+        for file in &self.workspace_files {
+            let remainder = if parent.is_empty() {
+                file.as_str()
+            } else if let Some(rest) = file.strip_prefix(&format!("{}/", parent)) {
+                rest
+            } else {
+                continue;
+            };
+            if let Some(name) = remainder.split('/').next() {
+                children.insert(name.to_string());
+            }
+        }
+
+        let mut rows = Vec::new();
+        for name in children {
+            let path = if parent.is_empty() {
+                name.clone()
+            } else {
+                format!("{}/{}", parent, name)
+            };
+            let has_children = self
+                .workspace_files
+                .iter()
+                .any(|f| f.starts_with(&format!("{}/", path)));
+            let indent = Space::new().width((depth * 10) as f32);
+            if has_children {
+                let expanded = self.expanded_workspace_folders.contains(&path);
+                rows.push(
+                    button(row![
+                        indent,
+                        text(if expanded { "▾" } else { "▸" })
+                            .size(9)
+                            .color(MayaColors::SOLAR_GOLD),
+                        Space::new().width(4),
+                        text(format!("📁 {}", name))
+                            .size(9)
+                            .color(MayaColors::MAYA_BLUE)
+                    ])
+                    .width(Length::Fill)
+                    .padding(Padding::from([3, 4]))
+                    .on_press(LeftCodexMessage::ToggleWorkspaceFolder(path.clone()).into())
+                    .into(),
+                );
+                if expanded {
+                    rows.extend(self.render_workspace_tree_rows(&path, depth + 1));
+                }
+            } else {
+                rows.push(
+                    button(row![
+                        indent,
+                        Space::new().width(12),
+                        text(format!("📄 {}", name))
+                            .size(9)
+                            .color(MayaColors::STARLIGHT_WHITE)
+                    ])
+                    .width(Length::Fill)
+                    .padding(Padding::from([3, 4]))
+                    .on_press(LeftCodexMessage::OpenFileInEditor(path).into())
+                    .into(),
+                );
+            }
+        }
+        rows
+    }
+
+    fn render_repo_section<'a, Message: 'a + From<LeftCodexMessage> + Clone>(
+        &'a self,
+    ) -> Element<'a, Message> {
         let repo_pill = button(
             row![
                 text("🏛️").size(11),
                 Space::new().width(6),
-                text(&self.current_repo_name).size(11).color(MayaColors::JADE_GLOW),
+                text(&self.current_repo_name)
+                    .size(11)
+                    .color(MayaColors::JADE_GLOW),
                 Space::new().width(Length::Fill),
-                text(if self.is_repo_dropdown_open { "▲" } else { "▼" }).size(9).color(MayaColors::GLYPH_DIM),
+                text(if self.is_repo_dropdown_open {
+                    "▲"
+                } else {
+                    "▼"
+                })
+                .size(9)
+                .color(MayaColors::GLYPH_DIM),
             ]
-            .align_y(Alignment::Center)
+            .align_y(Alignment::Center),
         )
         .padding(Padding::from([4, 8]))
         .width(Length::Fill)
@@ -388,7 +475,11 @@ impl LeftCodex {
         ]
         .align_y(Alignment::Center);
 
-        let mut col = column![row![repo_pill].align_y(Alignment::Center), Space::new().height(4), actions];
+        let mut col = column![
+            row![repo_pill].align_y(Alignment::Center),
+            Space::new().height(4),
+            actions
+        ];
 
         // Dropdown list
         if self.is_repo_dropdown_open {
@@ -400,7 +491,11 @@ impl LeftCodex {
                     .unwrap_or_else(|| path.clone());
 
                 let is_active = path == &self.current_repo_path;
-                let color = if is_active { MayaColors::JADE_GLOW } else { MayaColors::STARLIGHT_WHITE };
+                let color = if is_active {
+                    MayaColors::JADE_GLOW
+                } else {
+                    MayaColors::STARLIGHT_WHITE
+                };
 
                 list = list.push(
                     button(
@@ -412,7 +507,7 @@ impl LeftCodex {
                                 text(path).size(8).color(MayaColors::GLYPH_DIM),
                             ]
                         ]
-                        .align_y(Alignment::Center)
+                        .align_y(Alignment::Center),
                     )
                     .width(Length::Fill)
                     .padding(Padding::from([3, 6]))
@@ -425,29 +520,29 @@ impl LeftCodex {
                         },
                         ..Default::default()
                     })
-                    .on_press(LeftCodexMessage::SelectRepo(path.clone()).into())
+                    .on_press(LeftCodexMessage::SelectRepo(path.clone()).into()),
                 );
             }
 
-            col = col.push(
-                container(list)
-                    .padding(Padding::from([4, 6]))
-                    .style(|_| container::Style {
-                        background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
-                        border: Border {
-                            color: MayaColors::JADE_GLOW,
-                            width: 1.0,
-                            radius: 3.0.into(),
-                        },
-                        ..Default::default()
-                    })
-            );
+            col = col.push(container(list).padding(Padding::from([4, 6])).style(|_| {
+                container::Style {
+                    background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
+                    border: Border {
+                        color: MayaColors::JADE_GLOW,
+                        width: 1.0,
+                        radius: 3.0.into(),
+                    },
+                    ..Default::default()
+                }
+            }));
         }
 
         // Clone Modal
         if self.is_clone_modal_open {
             let clone_box = column![
-                text("🌐 THE CLONE CHAMBER").size(10).color(MayaColors::MAYA_BLUE),
+                text("🌐 THE CLONE CHAMBER")
+                    .size(10)
+                    .color(MayaColors::MAYA_BLUE),
                 Space::new().height(4),
                 text_input("Remote URL (https://...)", &self.clone_url_input)
                     .on_input(|s| LeftCodexMessage::CloneUrlChanged(s).into())
@@ -460,14 +555,21 @@ impl LeftCodex {
                     .padding(4),
                 Space::new().height(6),
                 row![
-                    button(text("Transmute & Clone").size(9).color(MayaColors::OBSIDIAN_VOID))
-                        .padding(Padding::from([3, 8]))
-                        .style(|_, _| button::Style {
-                            background: Some(MayaColors::MAYA_BLUE.into()),
-                            border: Border { radius: 3.0.into(), ..Default::default() },
+                    button(
+                        text("Transmute & Clone")
+                            .size(9)
+                            .color(MayaColors::OBSIDIAN_VOID)
+                    )
+                    .padding(Padding::from([3, 8]))
+                    .style(|_, _| button::Style {
+                        background: Some(MayaColors::MAYA_BLUE.into()),
+                        border: Border {
+                            radius: 3.0.into(),
                             ..Default::default()
-                        })
-                        .on_press(LeftCodexMessage::ConfirmClone.into()),
+                        },
+                        ..Default::default()
+                    })
+                    .on_press(LeftCodexMessage::ConfirmClone.into()),
                     Space::new().width(6),
                     button(text("Cancel").size(9).color(MayaColors::GLYPH_DIM))
                         .padding(Padding::from([3, 6]))
@@ -476,20 +578,23 @@ impl LeftCodex {
             ]
             .padding(Padding::from([6, 8]));
 
-            col = col.push(
-                container(clone_box)
-                    .style(|_| container::Style {
-                        background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
-                        border: Border { color: MayaColors::MAYA_BLUE, width: 1.0, radius: 4.0.into() },
-                        ..Default::default()
-                    })
-            );
+            col = col.push(container(clone_box).style(|_| container::Style {
+                background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
+                border: Border {
+                    color: MayaColors::MAYA_BLUE,
+                    width: 1.0,
+                    radius: 4.0.into(),
+                },
+                ..Default::default()
+            }));
         }
 
         // Init Modal
         if self.is_init_modal_open {
             let init_box = column![
-                text("✨ THE GENESIS ALTAR").size(10).color(MayaColors::SOLAR_GOLD),
+                text("✨ THE GENESIS ALTAR")
+                    .size(10)
+                    .color(MayaColors::SOLAR_GOLD),
                 Space::new().height(4),
                 text_input("Local directory to initialize", &self.init_dir_input)
                     .on_input(|s| LeftCodexMessage::InitDirChanged(s).into())
@@ -497,14 +602,21 @@ impl LeftCodex {
                     .padding(4),
                 Space::new().height(6),
                 row![
-                    button(text("Sanctify Genesis").size(9).color(MayaColors::OBSIDIAN_VOID))
-                        .padding(Padding::from([3, 8]))
-                        .style(|_, _| button::Style {
-                            background: Some(MayaColors::SOLAR_GOLD.into()),
-                            border: Border { radius: 3.0.into(), ..Default::default() },
+                    button(
+                        text("Sanctify Genesis")
+                            .size(9)
+                            .color(MayaColors::OBSIDIAN_VOID)
+                    )
+                    .padding(Padding::from([3, 8]))
+                    .style(|_, _| button::Style {
+                        background: Some(MayaColors::SOLAR_GOLD.into()),
+                        border: Border {
+                            radius: 3.0.into(),
                             ..Default::default()
-                        })
-                        .on_press(LeftCodexMessage::ConfirmInit.into()),
+                        },
+                        ..Default::default()
+                    })
+                    .on_press(LeftCodexMessage::ConfirmInit.into()),
                     Space::new().width(6),
                     button(text("Cancel").size(9).color(MayaColors::GLYPH_DIM))
                         .padding(Padding::from([3, 6]))
@@ -513,31 +625,44 @@ impl LeftCodex {
             ]
             .padding(Padding::from([6, 8]));
 
-            col = col.push(
-                container(init_box)
-                    .style(|_| container::Style {
-                        background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
-                        border: Border { color: MayaColors::SOLAR_GOLD, width: 1.0, radius: 4.0.into() },
-                        ..Default::default()
-                    })
-            );
+            col = col.push(container(init_box).style(|_| container::Style {
+                background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
+                border: Border {
+                    color: MayaColors::SOLAR_GOLD,
+                    width: 1.0,
+                    radius: 4.0.into(),
+                },
+                ..Default::default()
+            }));
         }
 
         col.into()
     }
 
-    fn render_branch_section<'a, Message: 'a + From<LeftCodexMessage> + Clone>(&'a self) -> Element<'a, Message> {
+    fn render_branch_section<'a, Message: 'a + From<LeftCodexMessage> + Clone>(
+        &'a self,
+    ) -> Element<'a, Message> {
         let title_row = row![
-            text("🌿 YAXCHÉ (BRANCHES)").size(11).color(MayaColors::GLYPH_DIM),
+            text("🌿 YAXCHÉ (BRANCHES)")
+                .size(11)
+                .color(MayaColors::GLYPH_DIM),
             Space::new().width(Length::Fill),
             mayan_tooltip(
-                button(text(if self.is_sprouting_branch { "✖" } else { "＋" }).size(11).color(MayaColors::JADE_GLOW))
-                    .padding(Padding::from([0, 4]))
-                    .style(|_theme, _status| button::Style {
-                        background: Some(Color::TRANSPARENT.into()),
-                        ..Default::default()
+                button(
+                    text(if self.is_sprouting_branch {
+                        "✖"
+                    } else {
+                        "＋"
                     })
-                    .on_press(LeftCodexMessage::ToggleBranchInput.into()),
+                    .size(11)
+                    .color(MayaColors::JADE_GLOW)
+                )
+                .padding(Padding::from([0, 4]))
+                .style(|_theme, _status| button::Style {
+                    background: Some(Color::TRANSPARENT.into()),
+                    ..Default::default()
+                })
+                .on_press(LeftCodexMessage::ToggleBranchInput.into()),
                 "Sprout a new branch from current HEAD (git branch)",
                 Position::Top,
             ),
@@ -564,8 +689,16 @@ impl LeftCodex {
 
         for branch in &self.local_branches {
             let is_active = branch == &self.active_branch;
-            let dot_color = if is_active { MayaColors::JADE_GLOW } else { MayaColors::OBSIDIAN_BORDER };
-            let text_color = if is_active { MayaColors::JADE_GLOW } else { MayaColors::STARLIGHT_WHITE };
+            let dot_color = if is_active {
+                MayaColors::JADE_GLOW
+            } else {
+                MayaColors::OBSIDIAN_BORDER
+            };
+            let text_color = if is_active {
+                MayaColors::JADE_GLOW
+            } else {
+                MayaColors::STARLIGHT_WHITE
+            };
 
             let branch_row = row![
                 text("•").size(14).color(dot_color),
@@ -579,12 +712,21 @@ impl LeftCodex {
                 .width(Length::Fill)
                 .style(move |_theme, status| {
                     let bg = match status {
-                        button::Status::Hovered => Some(Color { a: 0.15, ..MayaColors::JADE_GLOW }.into()),
+                        button::Status::Hovered => Some(
+                            Color {
+                                a: 0.15,
+                                ..MayaColors::JADE_GLOW
+                            }
+                            .into(),
+                        ),
                         _ => None,
                     };
                     button::Style {
                         background: bg,
-                        border: Border { radius: 2.0.into(), ..Default::default() },
+                        border: Border {
+                            radius: 2.0.into(),
+                            ..Default::default()
+                        },
                         ..Default::default()
                     }
                 })
@@ -600,9 +742,13 @@ impl LeftCodex {
         branch_list.into()
     }
 
-    fn render_remote_section<'a, Message: 'a + From<LeftCodexMessage> + Clone>(&'a self) -> Element<'a, Message> {
+    fn render_remote_section<'a, Message: 'a + From<LeftCodexMessage> + Clone>(
+        &'a self,
+    ) -> Element<'a, Message> {
         let title_row = row![
-            text("🌐 REMOTES (PORTALS)").size(11).color(MayaColors::GLYPH_DIM),
+            text("🌐 REMOTES (PORTALS)")
+                .size(11)
+                .color(MayaColors::GLYPH_DIM),
             Space::new().width(Length::Fill),
             mayan_tooltip(
                 button(text("⟳").size(11).color(MayaColors::MAYA_BLUE))
@@ -633,12 +779,21 @@ impl LeftCodex {
                 .width(Length::Fill)
                 .style(|_theme, status| {
                     let bg = match status {
-                        button::Status::Hovered => Some(Color { a: 0.15, ..MayaColors::MAYA_BLUE }.into()),
+                        button::Status::Hovered => Some(
+                            Color {
+                                a: 0.15,
+                                ..MayaColors::MAYA_BLUE
+                            }
+                            .into(),
+                        ),
                         _ => None,
                     };
                     button::Style {
                         background: bg,
-                        border: Border { radius: 2.0.into(), ..Default::default() },
+                        border: Border {
+                            radius: 2.0.into(),
+                            ..Default::default()
+                        },
                         ..Default::default()
                     }
                 });
@@ -653,18 +808,26 @@ impl LeftCodex {
         remote_list.into()
     }
 
-    fn render_tag_section<'a, Message: 'a + From<LeftCodexMessage> + Clone>(&'a self) -> Element<'a, Message> {
+    fn render_tag_section<'a, Message: 'a + From<LeftCodexMessage> + Clone>(
+        &'a self,
+    ) -> Element<'a, Message> {
         let title_row = row![
-            text("🏷️ LAMAT (TAGS)").size(11).color(MayaColors::GLYPH_DIM),
+            text("🏷️ LAMAT (TAGS)")
+                .size(11)
+                .color(MayaColors::GLYPH_DIM),
             Space::new().width(Length::Fill),
             mayan_tooltip(
-                button(text(if self.is_inscribing_tag { "✖" } else { "＋" }).size(11).color(MayaColors::SOLAR_GOLD))
-                    .padding(Padding::from([0, 4]))
-                    .style(|_theme, _status| button::Style {
-                        background: Some(Color::TRANSPARENT.into()),
-                        ..Default::default()
-                    })
-                    .on_press(LeftCodexMessage::ToggleTagInput.into()),
+                button(
+                    text(if self.is_inscribing_tag { "✖" } else { "＋" })
+                        .size(11)
+                        .color(MayaColors::SOLAR_GOLD)
+                )
+                .padding(Padding::from([0, 4]))
+                .style(|_theme, _status| button::Style {
+                    background: Some(Color::TRANSPARENT.into()),
+                    ..Default::default()
+                })
+                .on_press(LeftCodexMessage::ToggleTagInput.into()),
                 "Inscribe a new tag seal on current HEAD (git tag)",
                 Position::Top,
             ),
@@ -690,7 +853,11 @@ impl LeftCodex {
         }
 
         if self.tags.is_empty() {
-            tag_list = tag_list.push(text("No tags inscribed").size(9).color(MayaColors::GLYPH_DIM));
+            tag_list = tag_list.push(
+                text("No tags inscribed")
+                    .size(9)
+                    .color(MayaColors::GLYPH_DIM),
+            );
         } else {
             for tag in &self.tags {
                 let tag_row = row![
@@ -705,12 +872,21 @@ impl LeftCodex {
                     .width(Length::Fill)
                     .style(|_theme, status| {
                         let bg = match status {
-                            button::Status::Hovered => Some(Color { a: 0.15, ..MayaColors::SOLAR_GOLD }.into()),
+                            button::Status::Hovered => Some(
+                                Color {
+                                    a: 0.15,
+                                    ..MayaColors::SOLAR_GOLD
+                                }
+                                .into(),
+                            ),
                             _ => None,
                         };
                         button::Style {
                             background: bg,
-                            border: Border { radius: 2.0.into(), ..Default::default() },
+                            border: Border {
+                                radius: 2.0.into(),
+                                ..Default::default()
+                            },
                             ..Default::default()
                         }
                     })
@@ -727,9 +903,13 @@ impl LeftCodex {
         tag_list.into()
     }
 
-    fn render_stash_section<'a, Message: 'a + From<LeftCodexMessage> + Clone>(&'a self) -> Element<'a, Message> {
+    fn render_stash_section<'a, Message: 'a + From<LeftCodexMessage> + Clone>(
+        &'a self,
+    ) -> Element<'a, Message> {
         let title_row = row![
-            text("📦 AK'BAL (STASHES)").size(11).color(MayaColors::GLYPH_DIM),
+            text("📦 AK'BAL (STASHES)")
+                .size(11)
+                .color(MayaColors::GLYPH_DIM),
             Space::new().width(Length::Fill),
             mayan_tooltip(
                 button(text("＋").size(11).color(MayaColors::SOLAR_AMBER))
@@ -748,7 +928,11 @@ impl LeftCodex {
         let mut stash_list = column![title_row].spacing(2);
 
         if self.stashes.is_empty() {
-            stash_list = stash_list.push(text("Sanctuary vault is empty").size(9).color(MayaColors::GLYPH_DIM));
+            stash_list = stash_list.push(
+                text("Sanctuary vault is empty")
+                    .size(9)
+                    .color(MayaColors::GLYPH_DIM),
+            );
         } else {
             for (idx, stash) in self.stashes.iter().enumerate() {
                 let stash_row = row![
@@ -763,12 +947,21 @@ impl LeftCodex {
                     .width(Length::Fill)
                     .style(|_theme, status| {
                         let bg = match status {
-                            button::Status::Hovered => Some(Color { a: 0.15, ..MayaColors::SOLAR_AMBER }.into()),
+                            button::Status::Hovered => Some(
+                                Color {
+                                    a: 0.15,
+                                    ..MayaColors::SOLAR_AMBER
+                                }
+                                .into(),
+                            ),
                             _ => None,
                         };
                         button::Style {
                             background: bg,
-                            border: Border { radius: 2.0.into(), ..Default::default() },
+                            border: Border {
+                                radius: 2.0.into(),
+                                ..Default::default()
+                            },
                             ..Default::default()
                         }
                     })

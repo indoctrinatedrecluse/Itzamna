@@ -61,6 +61,7 @@ pub enum CenterLoomMessage {
     SelectParent(String),
     CloseCommitDetails,
     AmendCommit(String),
+    OpenUrl(String),
 }
 
 pub struct CenterLoom {
@@ -118,7 +119,12 @@ impl CenterLoom {
 
     pub fn select_sha(&mut self, sha: &str) {
         self.dag.selected_sha = Some(sha.to_string());
-        if let Some(c) = self.dag.commits.iter().find(|c| c.short_sha == sha || c.sha.starts_with(sha)) {
+        if let Some(c) = self
+            .dag
+            .commits
+            .iter()
+            .find(|c| c.short_sha == sha || c.sha.starts_with(sha))
+        {
             self.selected_commit = Some(c.clone());
         }
     }
@@ -128,7 +134,9 @@ impl CenterLoom {
         self.active_tab = CenterTab::StoneDiff;
     }
 
-    pub fn view<'a, Message: 'a + From<CenterLoomMessage> + Clone>(&'a self) -> Element<'a, Message> {
+    pub fn view<'a, Message: 'a + From<CenterLoomMessage> + Clone>(
+        &'a self,
+    ) -> Element<'a, Message> {
         let tab_bar = row![
             self.tab_button("🌳 DAG", CenterTab::YaxcheDag),
             Space::new().width(2),
@@ -176,8 +184,12 @@ impl CenterLoom {
                         "Zoom out commit DAG",
                         iced::widget::tooltip::Position::Bottom,
                     ),
-                    container(text(format!("{:.0}%", self.dag.zoom * 100.0)).size(10).color(MayaColors::SOLAR_GOLD))
-                        .padding(Padding::from([2, 6])),
+                    container(
+                        text(format!("{:.0}%", self.dag.zoom * 100.0))
+                            .size(10)
+                            .color(MayaColors::SOLAR_GOLD)
+                    )
+                    .padding(Padding::from([2, 6])),
                     mayan_tooltip(
                         button(text("+").size(12).color(MayaColors::STARLIGHT_WHITE))
                             .padding(Padding::from([2, 7]))
@@ -251,68 +263,63 @@ impl CenterLoom {
                     .into()
                 }
             }
-            CenterTab::StoneDiff => {
-                self.diff_workbench
-                    .view()
-                    .map(|msg| CenterLoomMessage::Diff(msg).into())
-            }
-            CenterTab::KatunEditor => {
-                self.katun_editor
-                    .view()
-                    .map(|msg| CenterLoomMessage::Editor(msg).into())
-            }
-            CenterTab::AhauBlame => {
-                self.ahau_blame
-                    .view()
-                    .map(|msg| CenterLoomMessage::Blame(msg).into())
-            }
-            CenterTab::PopolVuhLog => {
-                self.popol_log
-                    .view()
-                    .map(|msg| CenterLoomMessage::PopolLog(msg).into())
-            }
-            CenterTab::RebaseCrucible => {
-                self.rebase_crucible
-                    .view()
-                    .map(|msg| CenterLoomMessage::Rebase(msg).into())
-            }
-            CenterTab::KukulcanMerge => {
-                self.kukulcan_merge
-                    .view()
-                    .map(|msg| CenterLoomMessage::Merge(msg).into())
-            }
-            CenterTab::XibalbaReflog => {
-                self.xibalba_reflog
-                    .view()
-                    .map(|msg| CenterLoomMessage::Reflog(msg).into())
-            }
-            CenterTab::ChacPurifier => {
-                self.chac_purifier
-                    .view()
-                    .map(|msg| CenterLoomMessage::Purifier(msg).into())
-            }
-            CenterTab::OverseerPortals => {
-                self.overseer_portals
-                    .view()
-                    .map(|msg| CenterLoomMessage::Portal(msg).into())
-            }
-            CenterTab::CelestialWorkflows => {
-                self.celestial_workflows
-                    .view()
-                    .map(|msg| CenterLoomMessage::Workflows(msg).into())
-            }
-            CenterTab::OracleRadar => {
-                self.oracle_radar
-                    .view()
-                    .map(|msg| CenterLoomMessage::Oracle(msg).into())
-            }
+            CenterTab::StoneDiff => self
+                .diff_workbench
+                .view()
+                .map(|msg| CenterLoomMessage::Diff(msg).into()),
+            CenterTab::KatunEditor => self
+                .katun_editor
+                .view()
+                .map(|msg| CenterLoomMessage::Editor(msg).into()),
+            CenterTab::AhauBlame => self
+                .ahau_blame
+                .view()
+                .map(|msg| CenterLoomMessage::Blame(msg).into()),
+            CenterTab::PopolVuhLog => self
+                .popol_log
+                .view()
+                .map(|msg| CenterLoomMessage::PopolLog(msg).into()),
+            CenterTab::RebaseCrucible => self
+                .rebase_crucible
+                .view()
+                .map(|msg| CenterLoomMessage::Rebase(msg).into()),
+            CenterTab::KukulcanMerge => self
+                .kukulcan_merge
+                .view()
+                .map(|msg| CenterLoomMessage::Merge(msg).into()),
+            CenterTab::XibalbaReflog => self
+                .xibalba_reflog
+                .view()
+                .map(|msg| CenterLoomMessage::Reflog(msg).into()),
+            CenterTab::ChacPurifier => self
+                .chac_purifier
+                .view()
+                .map(|msg| CenterLoomMessage::Purifier(msg).into()),
+            CenterTab::OverseerPortals => self
+                .overseer_portals
+                .view()
+                .map(|msg| CenterLoomMessage::Portal(msg).into()),
+            CenterTab::CelestialWorkflows => self
+                .celestial_workflows
+                .view()
+                .map(|msg| CenterLoomMessage::Workflows(msg).into()),
+            CenterTab::OracleRadar => self
+                .oracle_radar
+                .view()
+                .map(|msg| CenterLoomMessage::Oracle(msg).into()),
         };
 
         container(column![tab_bar, main_content])
             .width(Length::Fill)
             .height(Length::Fill)
             .style(|_theme| container::Style {
-                background: Some(Color { a: 0.92, ..MayaColors::OBSIDIAN_BASE }.into()),
+                background: Some(
+                    Color {
+                        a: 0.92,
+                        ..MayaColors::OBSIDIAN_BASE
+                    }
+                    .into(),
+                ),
                 border: Border {
                     color: MayaColors::OBSIDIAN_BORDER,
                     width: 0.0,
@@ -323,7 +330,9 @@ impl CenterLoom {
             .into()
     }
 
-    fn render_commit_details<'a, Message: 'a + From<CenterLoomMessage> + Clone>(&'a self) -> Element<'a, Message> {
+    fn render_commit_details<'a, Message: 'a + From<CenterLoomMessage> + Clone>(
+        &'a self,
+    ) -> Element<'a, Message> {
         let Some(c) = &self.selected_commit else {
             return container(
                 row![
@@ -352,13 +361,27 @@ impl CenterLoom {
 
         // 1. Header Bar: Status, Summary, Author, Time, Churn, and Close
         let header_row = row![
-            container(text(format!("☀️ KIN: {}", c.short_sha)).size(11).color(MayaColors::SOLAR_GOLD))
-                .padding(Padding::from([2, 6]))
-                .style(|_| container::Style {
-                    background: Some(Color { a: 0.25, ..MayaColors::SOLAR_GOLD }.into()),
-                    border: Border { color: MayaColors::SOLAR_GOLD, width: 0.8, radius: 3.0.into() },
-                    ..Default::default()
-                }),
+            container(
+                text(format!("☀️ KIN: {}", c.short_sha))
+                    .size(11)
+                    .color(MayaColors::SOLAR_GOLD)
+            )
+            .padding(Padding::from([2, 6]))
+            .style(|_| container::Style {
+                background: Some(
+                    Color {
+                        a: 0.25,
+                        ..MayaColors::SOLAR_GOLD
+                    }
+                    .into()
+                ),
+                border: Border {
+                    color: MayaColors::SOLAR_GOLD,
+                    width: 0.8,
+                    radius: 3.0.into()
+                },
+                ..Default::default()
+            }),
             Space::new().width(8),
             text(&c.summary).size(12).color(MayaColors::STARLIGHT_WHITE),
             Space::new().width(Length::Fill),
@@ -368,9 +391,13 @@ impl CenterLoom {
             Space::new().width(12),
             if let Some(det) = detailed {
                 row![
-                    text(format!("+{}", det.total_additions)).size(10).color(MayaColors::JADE_GLOW),
+                    text(format!("+{}", det.total_additions))
+                        .size(10)
+                        .color(MayaColors::JADE_GLOW),
                     Space::new().width(4),
-                    text(format!("-{}", det.total_deletions)).size(10).color(MayaColors::CINNABAR_BRIGHT),
+                    text(format!("-{}", det.total_deletions))
+                        .size(10)
+                        .color(MayaColors::CINNABAR_BRIGHT),
                 ]
                 .align_y(Alignment::Center)
             } else {
@@ -387,7 +414,11 @@ impl CenterLoom {
                         };
                         button::Style {
                             background: Some(MayaColors::OBSIDIAN_BASE.into()),
-                            border: Border { color: MayaColors::OBSIDIAN_BORDER, width: 0.8, radius: 2.0.into() },
+                            border: Border {
+                                color: MayaColors::OBSIDIAN_BORDER,
+                                width: 0.8,
+                                radius: 2.0.into(),
+                            },
                             text_color,
                             ..Default::default()
                         }
@@ -403,17 +434,29 @@ impl CenterLoom {
         // 2. Column 1: Ancestral Lineage & ODB Records
         let mut lineage_col = column![
             row![
-                text("🏛️ ANCESTRAL LINEAGE").size(9).color(MayaColors::SOLAR_GOLD),
+                text("🏛️ ANCESTRAL LINEAGE")
+                    .size(9)
+                    .color(MayaColors::SOLAR_GOLD),
                 Space::new().width(Length::Fill),
                 text("ODB").size(8).color(MayaColors::GLYPH_DIM),
             ],
             Space::new().height(2),
-            text(format!("⏰ Exact: {}", detailed.map(|d| d.author_time.as_str()).unwrap_or(&c.relative_time)))
-                .size(9)
-                .color(MayaColors::STARLIGHT_WHITE),
-            text(format!("👤 Author: {}", detailed.map(|d| d.author_name.as_str()).unwrap_or(&c.author_name)))
-                .size(9)
-                .color(MayaColors::JADE_GLOW),
+            text(format!(
+                "⏰ Exact: {}",
+                detailed
+                    .map(|d| d.author_time.as_str())
+                    .unwrap_or(&c.relative_time)
+            ))
+            .size(9)
+            .color(MayaColors::STARLIGHT_WHITE),
+            text(format!(
+                "👤 Author: {}",
+                detailed
+                    .map(|d| d.author_name.as_str())
+                    .unwrap_or(&c.author_name)
+            ))
+            .size(9)
+            .color(MayaColors::JADE_GLOW),
         ]
         .spacing(3);
 
@@ -421,21 +464,23 @@ impl CenterLoom {
             lineage_col = lineage_col.push(
                 text(format!("📧 {}", d.author_email))
                     .size(8)
-                    .color(MayaColors::GLYPH_DIM)
+                    .color(MayaColors::GLYPH_DIM),
             );
             if d.committer_name != d.author_name {
-                lineage_col = lineage_col.push(
-                    column![
-                        Space::new().height(2),
-                        text(format!("✍️ Committer: {}", d.committer_name)).size(9).color(MayaColors::MAYA_BLUE),
-                        text(format!("📧 {}", d.committer_email)).size(8).color(MayaColors::GLYPH_DIM),
-                    ]
-                );
+                lineage_col = lineage_col.push(column![
+                    Space::new().height(2),
+                    text(format!("✍️ Committer: {}", d.committer_name))
+                        .size(9)
+                        .color(MayaColors::MAYA_BLUE),
+                    text(format!("📧 {}", d.committer_email))
+                        .size(8)
+                        .color(MayaColors::GLYPH_DIM),
+                ]);
             }
             lineage_col = lineage_col.push(
                 text(format!("🌲 Tree: {}", d.tree_sha))
                     .size(9)
-                    .color(MayaColors::GLYPH_DIM)
+                    .color(MayaColors::GLYPH_DIM),
             );
             lineage_col = lineage_col.push(Space::new().height(4));
 
@@ -470,12 +515,16 @@ impl CenterLoom {
 
             lineage_col = lineage_col.push(Space::new().height(4));
             lineage_col = lineage_col.push(
-                text("Parent Inscriptions:").size(9).color(MayaColors::SOLAR_AMBER)
+                text("Parent Inscriptions:")
+                    .size(9)
+                    .color(MayaColors::SOLAR_AMBER),
             );
 
             if d.parent_shas.is_empty() {
                 lineage_col = lineage_col.push(
-                    text("Genesis Altar (Root Commit)").size(8).color(MayaColors::GLYPH_DIM)
+                    text("Genesis Altar (Root Commit)")
+                        .size(8)
+                        .color(MayaColors::GLYPH_DIM),
                 );
             } else {
                 for p_sha in &d.parent_shas {
@@ -485,7 +534,7 @@ impl CenterLoom {
                             text("⬆️ ").size(9).color(MayaColors::SOLAR_AMBER),
                             text(p_sha).size(9).color(MayaColors::STARLIGHT_WHITE),
                         ]
-                        .align_y(Alignment::Center)
+                        .align_y(Alignment::Center),
                     )
                     .padding(Padding::from([2, 5]))
                     .style(|_, status| {
@@ -495,7 +544,11 @@ impl CenterLoom {
                         };
                         button::Style {
                             background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
-                            border: Border { color: border_color, width: 0.8, radius: 2.0.into() },
+                            border: Border {
+                                color: border_color,
+                                width: 0.8,
+                                radius: 2.0.into(),
+                            },
                             ..Default::default()
                         }
                     })
@@ -506,45 +559,60 @@ impl CenterLoom {
             }
         }
 
-        let col1 = container(
-            scrollable(lineage_col.padding(Padding::from([6, 8]))).height(Length::Fill)
-        )
-        .width(Length::Fixed(240.0))
-        .height(Length::Fill)
-        .style(|_| container::Style {
-            background: Some(Color { a: 0.65, ..MayaColors::OBSIDIAN_BASE }.into()),
-            border: Border {
-                color: MayaColors::OBSIDIAN_BORDER,
-                width: 1.0,
-                radius: 3.0.into(),
-            },
-            ..Default::default()
-        });
+        let col1 =
+            container(scrollable(lineage_col.padding(Padding::from([6, 8]))).height(Length::Fill))
+                .width(Length::Fixed(240.0))
+                .height(Length::Fill)
+                .style(|_| container::Style {
+                    background: Some(
+                        Color {
+                            a: 0.65,
+                            ..MayaColors::OBSIDIAN_BASE
+                        }
+                        .into(),
+                    ),
+                    border: Border {
+                        color: MayaColors::OBSIDIAN_BORDER,
+                        width: 1.0,
+                        radius: 3.0.into(),
+                    },
+                    ..Default::default()
+                });
 
         // 3. Column 2: Auto-Parsed Mayan Markdown Inscription
-        let full_msg = detailed.map(|d| d.full_message.as_str()).unwrap_or(&c.summary);
+        let full_msg = detailed
+            .map(|d| d.full_message.as_str())
+            .unwrap_or(&c.summary);
         let markdown_content = MayanMarkdown::render(full_msg);
 
-        let col2 = container(
-            column![
-                row![
-                    text("📜 SACRED INSCRIPTION & PROPHETIC RECORD").size(9).color(MayaColors::SOLAR_GOLD),
-                    Space::new().width(Length::Fill),
-                    text("Auto-Parsed Markdown").size(8).color(MayaColors::JADE_GLOW),
-                ]
-                .padding(Padding::from([4, 8])),
-                scrollable(
-                    container(markdown_content)
-                        .padding(Padding::from([4, 10]))
-                        .width(Length::Fill)
-                )
-                .height(Length::Fill),
+        let col2 = container(column![
+            row![
+                text("📜 SACRED INSCRIPTION & PROPHETIC RECORD")
+                    .size(9)
+                    .color(MayaColors::SOLAR_GOLD),
+                Space::new().width(Length::Fill),
+                text("Auto-Parsed Markdown")
+                    .size(8)
+                    .color(MayaColors::JADE_GLOW),
             ]
-        )
+            .padding(Padding::from([4, 8])),
+            scrollable(
+                container(markdown_content)
+                    .padding(Padding::from([4, 10]))
+                    .width(Length::Fill)
+            )
+            .height(Length::Fill),
+        ])
         .width(Length::FillPortion(4))
         .height(Length::Fill)
         .style(|_| container::Style {
-            background: Some(Color { a: 0.75, ..MayaColors::OBSIDIAN_BASE }.into()),
+            background: Some(
+                Color {
+                    a: 0.75,
+                    ..MayaColors::OBSIDIAN_BASE
+                }
+                .into(),
+            ),
             border: Border {
                 color: MayaColors::OBSIDIAN_BORDER,
                 width: 1.0,
@@ -559,15 +627,41 @@ impl CenterLoom {
         if let Some(det) = detailed {
             if det.changed_files.is_empty() {
                 files_column = files_column.push(
-                    text("No file modifications recorded in this commit").size(9).color(MayaColors::GLYPH_DIM)
+                    text("No file modifications recorded in this commit")
+                        .size(9)
+                        .color(MayaColors::GLYPH_DIM),
                 );
             } else {
                 for f in &det.changed_files {
                     let (status_color, status_bg) = match f.status {
-                        "A" => (MayaColors::JADE_GLOW, Color { a: 0.2, ..MayaColors::JADE_GLOW }),
-                        "D" => (MayaColors::CINNABAR_BRIGHT, Color { a: 0.2, ..MayaColors::CINNABAR_BRIGHT }),
-                        "R" => (MayaColors::MAYA_BLUE, Color { a: 0.2, ..MayaColors::MAYA_BLUE }),
-                        _ => (MayaColors::SOLAR_AMBER, Color { a: 0.2, ..MayaColors::SOLAR_AMBER }),
+                        "A" => (
+                            MayaColors::JADE_GLOW,
+                            Color {
+                                a: 0.2,
+                                ..MayaColors::JADE_GLOW
+                            },
+                        ),
+                        "D" => (
+                            MayaColors::CINNABAR_BRIGHT,
+                            Color {
+                                a: 0.2,
+                                ..MayaColors::CINNABAR_BRIGHT
+                            },
+                        ),
+                        "R" => (
+                            MayaColors::MAYA_BLUE,
+                            Color {
+                                a: 0.2,
+                                ..MayaColors::MAYA_BLUE
+                            },
+                        ),
+                        _ => (
+                            MayaColors::SOLAR_AMBER,
+                            Color {
+                                a: 0.2,
+                                ..MayaColors::SOLAR_AMBER
+                            },
+                        ),
                     };
 
                     let path_clone = f.path.clone();
@@ -577,7 +671,11 @@ impl CenterLoom {
                             .padding(Padding::from([1, 4]))
                             .style(move |_| container::Style {
                                 background: Some(status_bg.into()),
-                                border: Border { color: status_color, width: 0.5, radius: 2.0.into() },
+                                border: Border {
+                                    color: status_color,
+                                    width: 0.5,
+                                    radius: 2.0.into()
+                                },
                                 ..Default::default()
                             }),
                         Space::new().width(6),
@@ -586,9 +684,13 @@ impl CenterLoom {
                             .color(MayaColors::STARLIGHT_WHITE)
                             .width(Length::Fill),
                         Space::new().width(4),
-                        text(format!("+{}", f.additions)).size(8).color(MayaColors::JADE_GLOW),
+                        text(format!("+{}", f.additions))
+                            .size(8)
+                            .color(MayaColors::JADE_GLOW),
                         Space::new().width(2),
-                        text(format!("-{}", f.deletions)).size(8).color(MayaColors::CINNABAR_BRIGHT),
+                        text(format!("-{}", f.deletions))
+                            .size(8)
+                            .color(MayaColors::CINNABAR_BRIGHT),
                         Space::new().width(6),
                         container(text("DIFF ➔").size(8).color(MayaColors::SOLAR_GOLD))
                             .padding(Padding::from([1, 4])),
@@ -602,52 +704,79 @@ impl CenterLoom {
                         .style(|_, status| {
                             let (bg, border_color) = match status {
                                 button::Status::Hovered => (
-                                    Color { a: 0.35, ..MayaColors::OBSIDIAN_SURFACE },
+                                    Color {
+                                        a: 0.35,
+                                        ..MayaColors::OBSIDIAN_SURFACE
+                                    },
                                     MayaColors::SOLAR_GOLD,
                                 ),
                                 _ => (
-                                    Color { a: 0.15, ..MayaColors::OBSIDIAN_SURFACE },
+                                    Color {
+                                        a: 0.15,
+                                        ..MayaColors::OBSIDIAN_SURFACE
+                                    },
                                     MayaColors::OBSIDIAN_BORDER,
                                 ),
                             };
                             button::Style {
                                 background: Some(bg.into()),
-                                border: Border { color: border_color, width: 0.8, radius: 2.0.into() },
+                                border: Border {
+                                    color: border_color,
+                                    width: 0.8,
+                                    radius: 2.0.into(),
+                                },
                                 ..Default::default()
                             }
                         })
-                        .on_press(CenterLoomMessage::OpenCommitFileInDiff { sha: sha_clone, path: path_clone }.into());
+                        .on_press(
+                            CenterLoomMessage::OpenCommitFileInDiff {
+                                sha: sha_clone,
+                                path: path_clone,
+                            }
+                            .into(),
+                        );
 
-                    files_column = files_column.push(
-                        mayan_tooltip(
-                            file_btn,
-                            "Click to inspect intra-line stone diff for this relic",
-                            Position::Top,
-                        )
-                    );
+                    files_column = files_column.push(mayan_tooltip(
+                        file_btn,
+                        "Click to inspect intra-line stone diff for this relic",
+                        Position::Top,
+                    ));
                 }
             }
         } else {
             files_column = files_column.push(
-                text("Retrieving ODB diff tree...").size(9).color(MayaColors::GLYPH_DIM)
+                text("Retrieving ODB diff tree...")
+                    .size(9)
+                    .color(MayaColors::GLYPH_DIM),
             );
         }
 
-        let col3 = container(
-            column![
-                row![
-                    text("🏺 ALTERED RELICS & TREE DELTAS").size(9).color(MayaColors::SOLAR_GOLD),
-                    Space::new().width(Length::Fill),
-                    text(format!("{} files", detailed.map(|d| d.changed_files.len()).unwrap_or(0))).size(8).color(MayaColors::GLYPH_DIM),
-                ]
-                .padding(Padding::from([4, 8])),
-                scrollable(files_column).height(Length::Fill),
+        let col3 = container(column![
+            row![
+                text("🏺 ALTERED RELICS & TREE DELTAS")
+                    .size(9)
+                    .color(MayaColors::SOLAR_GOLD),
+                Space::new().width(Length::Fill),
+                text(format!(
+                    "{} files",
+                    detailed.map(|d| d.changed_files.len()).unwrap_or(0)
+                ))
+                .size(8)
+                .color(MayaColors::GLYPH_DIM),
             ]
-        )
+            .padding(Padding::from([4, 8])),
+            scrollable(files_column).height(Length::Fill),
+        ])
         .width(Length::FillPortion(3))
         .height(Length::Fill)
         .style(|_| container::Style {
-            background: Some(Color { a: 0.65, ..MayaColors::OBSIDIAN_BASE }.into()),
+            background: Some(
+                Color {
+                    a: 0.65,
+                    ..MayaColors::OBSIDIAN_BASE
+                }
+                .into(),
+            ),
             border: Border {
                 color: MayaColors::OBSIDIAN_BORDER,
                 width: 1.0,
@@ -656,14 +785,10 @@ impl CenterLoom {
             ..Default::default()
         });
 
-        let columns_row = row![
-            col1,
-            col2,
-            col3,
-        ]
-        .spacing(6)
-        .width(Length::Fill)
-        .height(Length::Fill);
+        let columns_row = row![col1, col2, col3,]
+            .spacing(6)
+            .width(Length::Fill)
+            .height(Length::Fill);
 
         let content = column![
             header_row,
@@ -686,7 +811,13 @@ impl CenterLoom {
             .width(Length::Fill)
             .height(Length::FillPortion(2))
             .style(|_theme| container::Style {
-                background: Some(Color { a: 0.94, ..MayaColors::OBSIDIAN_SURFACE }.into()),
+                background: Some(
+                    Color {
+                        a: 0.94,
+                        ..MayaColors::OBSIDIAN_SURFACE
+                    }
+                    .into(),
+                ),
                 border: Border {
                     color: MayaColors::OBSIDIAN_BORDER,
                     width: 1.0,

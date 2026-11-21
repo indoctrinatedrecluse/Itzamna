@@ -76,10 +76,7 @@ impl CosmicLoom {
     }
 
     pub fn view<'a, Message: 'a>(&'a self, width: f32, height: f32) -> Element<'a, Message> {
-        Canvas::new(self)
-            .width(width)
-            .height(height)
-            .into()
+        Canvas::new(self).width(width).height(height).into()
     }
 }
 
@@ -98,11 +95,7 @@ impl<Message> canvas::Program<Message> for CosmicLoom {
         let center = Point::new(bounds.width * 0.5, bounds.height * 0.52);
 
         // 1. Cosmic Void Backdrop
-        frame.fill_rectangle(
-            Point::ORIGIN,
-            bounds.size(),
-            MayaColors::OBSIDIAN_VOID,
-        );
+        frame.fill_rectangle(Point::ORIGIN, bounds.size(), MayaColors::OBSIDIAN_VOID);
 
         // 2. Drifting Star Motes and Nebula Web
         self.draw_celestial_dust(&mut frame, bounds.size());
@@ -237,6 +230,7 @@ impl CosmicLoom {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn draw_mayan_ring(
         &self,
         frame: &mut Frame,
@@ -256,13 +250,19 @@ impl CosmicLoom {
         frame.stroke(
             &outer_circle,
             Stroke::default()
-                .with_color(Color { a: alpha, ..rim_color })
+                .with_color(Color {
+                    a: alpha,
+                    ..rim_color
+                })
                 .with_width(1.5),
         );
         frame.stroke(
             &inner_circle,
             Stroke::default()
-                .with_color(Color { a: alpha * 0.8, ..rim_color })
+                .with_color(Color {
+                    a: alpha * 0.8,
+                    ..rim_color
+                })
                 .with_width(1.0),
         );
 
@@ -286,7 +286,10 @@ impl CosmicLoom {
             frame.stroke(
                 &spoke,
                 Stroke::default()
-                    .with_color(Color { a: alpha * 0.9, ..notch_color })
+                    .with_color(Color {
+                        a: alpha * 0.9,
+                        ..notch_color
+                    })
                     .with_width(2.0),
             );
 
@@ -299,11 +302,15 @@ impl CosmicLoom {
             let dot = Path::circle(dot_p, 2.0);
             frame.fill(
                 &dot,
-                Color { a: alpha * 0.7, ..notch_color },
+                Color {
+                    a: alpha * 0.7,
+                    ..notch_color
+                },
             );
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn draw_stepped_pyramid_ring(
         &self,
         frame: &mut Frame,

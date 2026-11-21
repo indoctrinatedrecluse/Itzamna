@@ -49,7 +49,9 @@ impl CredentialsModal {
         self.feedback_message = None;
     }
 
-    pub fn view<'a, Message: 'a + From<CredentialsMessage> + Clone>(&'a self) -> Option<Element<'a, Message>> {
+    pub fn view<'a, Message: 'a + From<CredentialsMessage> + Clone>(
+        &'a self,
+    ) -> Option<Element<'a, Message>> {
         if !self.is_open {
             return None;
         }
@@ -78,46 +80,65 @@ impl CredentialsModal {
         ]
         .align_y(Alignment::Center);
 
-        let subtitle = text("Configure local committer identity and remote conduit for this sanctuary.")
-            .size(10)
-            .color(MayaColors::PARCHMENT_MUTED);
+        let subtitle =
+            text("Configure local committer identity and remote conduit for this sanctuary.")
+                .size(10)
+                .color(MayaColors::PARCHMENT_MUTED);
 
-        let name_label = text("👤 Committer Name (user.name)").size(10).color(MayaColors::STARLIGHT_WHITE);
+        let name_label = text("👤 Committer Name (user.name)")
+            .size(10)
+            .color(MayaColors::STARLIGHT_WHITE);
         let name_input = text_input("e.g. Pacal the Great", &self.name)
             .size(11)
             .padding(Padding::from([6, 10]))
             .on_input(|s| CredentialsMessage::NameChanged(s).into())
             .style(|_, _| text_input::Style {
                 background: MayaColors::OBSIDIAN_VOID.into(),
-                border: Border { color: MayaColors::OBSIDIAN_BORDER, width: 1.0, radius: 4.0.into() },
+                border: Border {
+                    color: MayaColors::OBSIDIAN_BORDER,
+                    width: 1.0,
+                    radius: 4.0.into(),
+                },
                 icon: MayaColors::GLYPH_DIM,
                 placeholder: MayaColors::GLYPH_DIM,
                 value: MayaColors::STARLIGHT_WHITE,
                 selection: MayaColors::JADE_SHADOW,
             });
 
-        let email_label = text("📧 Committer Email (user.email)").size(10).color(MayaColors::STARLIGHT_WHITE);
+        let email_label = text("📧 Committer Email (user.email)")
+            .size(10)
+            .color(MayaColors::STARLIGHT_WHITE);
         let email_input = text_input("e.g. pacal@palenque.maya", &self.email)
             .size(11)
             .padding(Padding::from([6, 10]))
             .on_input(|s| CredentialsMessage::EmailChanged(s).into())
             .style(|_, _| text_input::Style {
                 background: MayaColors::OBSIDIAN_VOID.into(),
-                border: Border { color: MayaColors::OBSIDIAN_BORDER, width: 1.0, radius: 4.0.into() },
+                border: Border {
+                    color: MayaColors::OBSIDIAN_BORDER,
+                    width: 1.0,
+                    radius: 4.0.into(),
+                },
                 icon: MayaColors::GLYPH_DIM,
                 placeholder: MayaColors::GLYPH_DIM,
                 value: MayaColors::STARLIGHT_WHITE,
                 selection: MayaColors::JADE_SHADOW,
             });
 
-        let remote_label = text("🌐 Remote Origin URL (remote.origin.url)").size(10).color(MayaColors::STARLIGHT_WHITE);
+        let remote_label = text("🌐 Remote Origin URL (remote.origin.url)")
+            .size(10)
+            .color(MayaColors::STARLIGHT_WHITE);
         let remote_input = text_input("e.g. https://github.com/org/repo.git", &self.remote_url)
             .size(11)
             .padding(Padding::from([6, 10]))
             .on_input(|s| CredentialsMessage::RemoteUrlChanged(s).into())
             .style(|_, _| text_input::Style {
                 background: MayaColors::OBSIDIAN_VOID.into(),
-                border: Border { color: MayaColors::OBSIDIAN_BORDER, width: 1.0, radius: 4.0.into() },
+                border: Border {
+                    color: MayaColors::OBSIDIAN_BORDER,
+                    width: 1.0,
+                    radius: 4.0.into(),
+                },
                 icon: MayaColors::GLYPH_DIM,
                 placeholder: MayaColors::GLYPH_DIM,
                 value: MayaColors::STARLIGHT_WHITE,
@@ -125,7 +146,11 @@ impl CredentialsModal {
             });
 
         let feedback: Element<'a, Message> = if let Some((msg, ok)) = &self.feedback_message {
-            let color = if *ok { MayaColors::JADE_GLOW } else { MayaColors::CINNABAR_BRIGHT };
+            let color = if *ok {
+                MayaColors::JADE_GLOW
+            } else {
+                MayaColors::CINNABAR_BRIGHT
+            };
             text(msg).size(10).color(color).into()
         } else {
             Space::new().height(0).into()
@@ -136,7 +161,11 @@ impl CredentialsModal {
                 .padding(Padding::from([6, 14]))
                 .style(|_, _| button::Style {
                     background: Some(MayaColors::OBSIDIAN_BASE.into()),
-                    border: Border { color: MayaColors::OBSIDIAN_BORDER, width: 1.0, radius: 4.0.into() },
+                    border: Border {
+                        color: MayaColors::OBSIDIAN_BORDER,
+                        width: 1.0,
+                        radius: 4.0.into()
+                    },
                     ..Default::default()
                 })
                 .on_press(CredentialsMessage::Close.into()),
@@ -145,7 +174,9 @@ impl CredentialsModal {
                 row![
                     text("💾").size(11),
                     Space::new().width(4),
-                    text("Inscribe Credentials").size(11).color(MayaColors::OBSIDIAN_VOID),
+                    text("Inscribe Credentials")
+                        .size(11)
+                        .color(MayaColors::OBSIDIAN_VOID),
                 ]
                 .align_y(Alignment::Center)
             )
@@ -157,7 +188,11 @@ impl CredentialsModal {
                 };
                 button::Style {
                     background: Some(bg.into()),
-                    border: Border { color: MayaColors::SOLAR_AMBER, width: 1.0, radius: 4.0.into() },
+                    border: Border {
+                        color: MayaColors::SOLAR_AMBER,
+                        width: 1.0,
+                        radius: 4.0.into(),
+                    },
                     ..Default::default()
                 }
             })
@@ -188,7 +223,7 @@ impl CredentialsModal {
                 actions_row,
             ]
             .padding(Padding::from([20, 24]))
-            .width(Length::Fixed(480.0))
+            .width(Length::Fixed(480.0)),
         )
         .style(|_| container::Style {
             background: Some(MayaColors::OBSIDIAN_BASE.into()), // 100% solid, fully opaque!
@@ -206,7 +241,13 @@ impl CredentialsModal {
             .center_x(Length::Fill)
             .center_y(Length::Fill)
             .style(|_| container::Style {
-                background: Some(Color { a: 0.70, ..MayaColors::OBSIDIAN_VOID }.into()),
+                background: Some(
+                    Color {
+                        a: 0.70,
+                        ..MayaColors::OBSIDIAN_VOID
+                    }
+                    .into(),
+                ),
                 ..Default::default()
             });
 

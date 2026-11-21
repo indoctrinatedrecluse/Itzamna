@@ -87,7 +87,11 @@ impl DiffWorkbench {
         self.context_title = context_title;
         self.files = files;
         self.file_path = active_file.clone();
-        self.file_diff = Some(crate::git::DiffEngine::compute_diff(old_text, new_text, &active_file));
+        self.file_diff = Some(crate::git::DiffEngine::compute_diff(
+            old_text,
+            new_text,
+            &active_file,
+        ));
     }
 
     pub fn set_working_context(
@@ -104,17 +108,27 @@ impl DiffWorkbench {
         self.context_title = context_title;
         self.files = files;
         self.file_path = active_file.clone();
-        self.file_diff = Some(crate::git::DiffEngine::compute_diff(old_text, new_text, &active_file));
+        self.file_diff = Some(crate::git::DiffEngine::compute_diff(
+            old_text,
+            new_text,
+            &active_file,
+        ));
     }
 
     pub fn set_active_file(&mut self, active_file: String, old_text: &str, new_text: &str) {
         self.file_path = active_file.clone();
-        self.file_diff = Some(crate::git::DiffEngine::compute_diff(old_text, new_text, &active_file));
+        self.file_diff = Some(crate::git::DiffEngine::compute_diff(
+            old_text,
+            new_text,
+            &active_file,
+        ));
     }
 
     pub fn set_file(&mut self, path: String, old_text: &str, new_text: &str) {
         self.file_path = path.clone();
-        self.file_diff = Some(crate::git::DiffEngine::compute_diff(old_text, new_text, &path));
+        self.file_diff = Some(crate::git::DiffEngine::compute_diff(
+            old_text, new_text, &path,
+        ));
         if !self.files.iter().any(|f| f.path == path) {
             self.files.push(DiffFileHeader {
                 path,
@@ -130,16 +144,22 @@ impl DiffWorkbench {
 
         // Top Context Banner
         let header = row![
-            text("🔪 ETZ'NAB' STONE DIFF").size(11).color(MayaColors::SOLAR_GOLD),
+            text("🔪 ETZ'NAB' STONE DIFF")
+                .size(11)
+                .color(MayaColors::SOLAR_GOLD),
             text(" • ").size(11).color(MayaColors::GLYPH_DIM),
-            text(&self.context_title).size(10).color(MayaColors::STARLIGHT_WHITE),
-            text(format!(" ({} altered codices)", self.files.len())).size(9).color(MayaColors::GLYPH_DIM),
+            text(&self.context_title)
+                .size(10)
+                .color(MayaColors::STARLIGHT_WHITE),
+            text(format!(" ({} altered codices)", self.files.len()))
+                .size(9)
+                .color(MayaColors::GLYPH_DIM),
             Space::new().width(Length::Fill),
             mayan_tooltip(
                 button(
-                    row![
-                        text("✕ Return to DAG").size(10).color(MayaColors::PARCHMENT_MUTED),
-                    ]
+                    row![text("✕ Return to DAG")
+                        .size(10)
+                        .color(MayaColors::PARCHMENT_MUTED),]
                     .align_y(Alignment::Center)
                 )
                 .padding(Padding::from([3, 10]))
@@ -195,7 +215,13 @@ impl DiffWorkbench {
             .width(Length::Fill)
             .height(Length::Fill)
             .style(|_theme| container::Style {
-                background: Some(Color { a: 0.88, ..MayaColors::OBSIDIAN_BASE }.into()),
+                background: Some(
+                    Color {
+                        a: 0.88,
+                        ..MayaColors::OBSIDIAN_BASE
+                    }
+                    .into(),
+                ),
                 border: Border {
                     color: MayaColors::OBSIDIAN_BORDER,
                     width: 0.0,
@@ -211,10 +237,34 @@ impl DiffWorkbench {
         file: &DiffFileHeader,
     ) -> Element<'a, Message> {
         let (status_color, status_bg) = match file.status.as_str() {
-            "A" => (MayaColors::JADE_GLOW, Color { a: 0.2, ..MayaColors::JADE_GLOW }),
-            "D" => (MayaColors::CINNABAR_BRIGHT, Color { a: 0.2, ..MayaColors::CINNABAR_BRIGHT }),
-            "R" => (MayaColors::MAYA_BLUE, Color { a: 0.2, ..MayaColors::MAYA_BLUE }),
-            _ => (MayaColors::SOLAR_AMBER, Color { a: 0.2, ..MayaColors::SOLAR_AMBER }),
+            "A" => (
+                MayaColors::JADE_GLOW,
+                Color {
+                    a: 0.2,
+                    ..MayaColors::JADE_GLOW
+                },
+            ),
+            "D" => (
+                MayaColors::CINNABAR_BRIGHT,
+                Color {
+                    a: 0.2,
+                    ..MayaColors::CINNABAR_BRIGHT
+                },
+            ),
+            "R" => (
+                MayaColors::MAYA_BLUE,
+                Color {
+                    a: 0.2,
+                    ..MayaColors::MAYA_BLUE
+                },
+            ),
+            _ => (
+                MayaColors::SOLAR_AMBER,
+                Color {
+                    a: 0.2,
+                    ..MayaColors::SOLAR_AMBER
+                },
+            ),
         };
 
         let card_content = row![
@@ -224,17 +274,30 @@ impl DiffWorkbench {
                 .padding(Padding::from([1, 4]))
                 .style(move |_| container::Style {
                     background: Some(status_bg.into()),
-                    border: Border { color: status_color, width: 0.5, radius: 2.0.into() },
+                    border: Border {
+                        color: status_color,
+                        width: 0.5,
+                        radius: 2.0.into()
+                    },
                     ..Default::default()
                 }),
             Space::new().width(8),
-            text(file.path.clone()).size(10).color(MayaColors::STARLIGHT_WHITE).width(Length::Fill),
+            text(file.path.clone())
+                .size(10)
+                .color(MayaColors::STARLIGHT_WHITE)
+                .width(Length::Fill),
             Space::new().width(8),
-            text(format!("+{}", file.additions)).size(9).color(MayaColors::JADE_GLOW),
+            text(format!("+{}", file.additions))
+                .size(9)
+                .color(MayaColors::JADE_GLOW),
             Space::new().width(4),
-            text(format!("-{}", file.deletions)).size(9).color(MayaColors::CINNABAR_BRIGHT),
+            text(format!("-{}", file.deletions))
+                .size(9)
+                .color(MayaColors::CINNABAR_BRIGHT),
             Space::new().width(10),
-            text("Click to expand diff ➔").size(9).color(MayaColors::SOLAR_GOLD),
+            text("Click to expand diff ➔")
+                .size(9)
+                .color(MayaColors::SOLAR_GOLD),
         ]
         .padding(Padding::from([5, 10]))
         .align_y(Alignment::Center);
@@ -245,11 +308,17 @@ impl DiffWorkbench {
             .style(|_, status| {
                 let (bg, border_color) = match status {
                     button::Status::Hovered => (
-                        Color { a: 0.40, ..MayaColors::OBSIDIAN_SURFACE },
+                        Color {
+                            a: 0.40,
+                            ..MayaColors::OBSIDIAN_SURFACE
+                        },
                         MayaColors::SOLAR_GOLD,
                     ),
                     _ => (
-                        Color { a: 0.20, ..MayaColors::OBSIDIAN_SURFACE },
+                        Color {
+                            a: 0.20,
+                            ..MayaColors::OBSIDIAN_SURFACE
+                        },
                         MayaColors::OBSIDIAN_BORDER,
                     ),
                 };
@@ -278,10 +347,34 @@ impl DiffWorkbench {
         is_commit_view: bool,
     ) -> Element<'a, Message> {
         let (status_color, status_bg) = match file.status.as_str() {
-            "A" => (MayaColors::JADE_GLOW, Color { a: 0.2, ..MayaColors::JADE_GLOW }),
-            "D" => (MayaColors::CINNABAR_BRIGHT, Color { a: 0.2, ..MayaColors::CINNABAR_BRIGHT }),
-            "R" => (MayaColors::MAYA_BLUE, Color { a: 0.2, ..MayaColors::MAYA_BLUE }),
-            _ => (MayaColors::SOLAR_AMBER, Color { a: 0.2, ..MayaColors::SOLAR_AMBER }),
+            "A" => (
+                MayaColors::JADE_GLOW,
+                Color {
+                    a: 0.2,
+                    ..MayaColors::JADE_GLOW
+                },
+            ),
+            "D" => (
+                MayaColors::CINNABAR_BRIGHT,
+                Color {
+                    a: 0.2,
+                    ..MayaColors::CINNABAR_BRIGHT
+                },
+            ),
+            "R" => (
+                MayaColors::MAYA_BLUE,
+                Color {
+                    a: 0.2,
+                    ..MayaColors::MAYA_BLUE
+                },
+            ),
+            _ => (
+                MayaColors::SOLAR_AMBER,
+                Color {
+                    a: 0.2,
+                    ..MayaColors::SOLAR_AMBER
+                },
+            ),
         };
 
         let card_header = row![
@@ -291,21 +384,31 @@ impl DiffWorkbench {
                 .padding(Padding::from([1, 4]))
                 .style(move |_| container::Style {
                     background: Some(status_bg.into()),
-                    border: Border { color: status_color, width: 0.5, radius: 2.0.into() },
+                    border: Border {
+                        color: status_color,
+                        width: 0.5,
+                        radius: 2.0.into()
+                    },
                     ..Default::default()
                 }),
             Space::new().width(8),
-            text(file.path.clone()).size(11).color(MayaColors::SOLAR_GOLD),
+            text(file.path.clone())
+                .size(11)
+                .color(MayaColors::SOLAR_GOLD),
             Space::new().width(10),
-            text(format!("+{}", file.additions)).size(9).color(MayaColors::JADE_GLOW),
+            text(format!("+{}", file.additions))
+                .size(9)
+                .color(MayaColors::JADE_GLOW),
             Space::new().width(4),
-            text(format!("-{}", file.deletions)).size(9).color(MayaColors::CINNABAR_BRIGHT),
+            text(format!("-{}", file.deletions))
+                .size(9)
+                .color(MayaColors::CINNABAR_BRIGHT),
             Space::new().width(Length::Fill),
             mayan_tooltip(
                 button(
-                    row![
-                        text("✎ Edit in K'atun").size(10).color(MayaColors::STARLIGHT_WHITE),
-                    ]
+                    row![text("✎ Edit in K'atun")
+                        .size(10)
+                        .color(MayaColors::STARLIGHT_WHITE),]
                     .align_y(Alignment::Center)
                 )
                 .padding(Padding::from([2, 8]))
@@ -316,7 +419,11 @@ impl DiffWorkbench {
                     };
                     button::Style {
                         background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
-                        border: Border { color: border_color, width: 1.0, radius: 3.0.into() },
+                        border: Border {
+                            color: border_color,
+                            width: 1.0,
+                            radius: 3.0.into(),
+                        },
                         ..Default::default()
                     }
                 })
@@ -337,7 +444,11 @@ impl DiffWorkbench {
                                 };
                                 button::Style {
                                     background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
-                                    border: Border { color: border_color, width: 1.0, radius: 3.0.into() },
+                                    border: Border {
+                                        color: border_color,
+                                        width: 1.0,
+                                        radius: 3.0.into(),
+                                    },
                                     ..Default::default()
                                 }
                             })
@@ -358,8 +469,12 @@ impl DiffWorkbench {
         if let Some(ref diff) = self.file_diff {
             if diff.hunks.is_empty() {
                 hunk_elements = hunk_elements.push(
-                    container(text("No modifications recorded in this stela buffer.").size(10).color(MayaColors::GLYPH_DIM))
-                        .padding(Padding::from(10))
+                    container(
+                        text("No modifications recorded in this stela buffer.")
+                            .size(10)
+                            .color(MayaColors::GLYPH_DIM),
+                    )
+                    .padding(Padding::from(10)),
                 );
             } else {
                 for (hunk_idx, hunk) in diff.hunks.iter().enumerate() {
@@ -369,27 +484,35 @@ impl DiffWorkbench {
             }
         } else {
             hunk_elements = hunk_elements.push(
-                container(text("Carving stone diff from Git ODB...").size(10).color(MayaColors::GLYPH_DIM))
-                    .padding(Padding::from(10))
+                container(
+                    text("Carving stone diff from Git ODB...")
+                        .size(10)
+                        .color(MayaColors::GLYPH_DIM),
+                )
+                .padding(Padding::from(10)),
             );
         }
 
-        container(
-            column![
-                card_header,
-                container(Space::new())
-                    .height(1)
-                    .width(Length::Fill)
-                    .style(|_| container::Style {
-                        background: Some(MayaColors::OBSIDIAN_BORDER.into()),
-                        ..Default::default()
-                    }),
-                hunk_elements,
-            ]
-        )
+        container(column![
+            card_header,
+            container(Space::new())
+                .height(1)
+                .width(Length::Fill)
+                .style(|_| container::Style {
+                    background: Some(MayaColors::OBSIDIAN_BORDER.into()),
+                    ..Default::default()
+                }),
+            hunk_elements,
+        ])
         .width(Length::Fill)
         .style(|_| container::Style {
-            background: Some(Color { a: 0.65, ..MayaColors::OBSIDIAN_SURFACE }.into()),
+            background: Some(
+                Color {
+                    a: 0.65,
+                    ..MayaColors::OBSIDIAN_SURFACE
+                }
+                .into(),
+            ),
             border: Border {
                 color: MayaColors::SOLAR_GOLD,
                 width: 1.0,
@@ -412,7 +535,68 @@ impl DiffWorkbench {
             if !is_commit_view {
                 if self.is_staged_context {
                     mayan_tooltip(
-                        button(text("Unstage Hunk -").size(10).color(MayaColors::CINNABAR_BRIGHT))
+                        button(
+                            text("Unstage Hunk -")
+                                .size(10)
+                                .color(MayaColors::CINNABAR_BRIGHT),
+                        )
+                        .padding(Padding::from([1, 6]))
+                        .style(|_, status| {
+                            let border_color = match status {
+                                button::Status::Hovered => MayaColors::CINNABAR_BRIGHT,
+                                _ => MayaColors::OBSIDIAN_BORDER,
+                            };
+                            button::Style {
+                                background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
+                                border: Border {
+                                    color: border_color,
+                                    width: 1.0,
+                                    radius: 3.0.into(),
+                                },
+                                ..Default::default()
+                            }
+                        })
+                        .on_press(DiffMessage::UnstageHunk(hunk_idx).into()),
+                        "Surgically unstage this hunk from the index (git restore --staged -p)",
+                        Position::Left,
+                    )
+                } else {
+                    row![
+                        mayan_tooltip(
+                            button(text("Stage Hunk +").size(10).color(MayaColors::JADE_GLOW))
+                                .padding(Padding::from([1, 6]))
+                                .style(|_, status| {
+                                    let border_color = match status {
+                                        button::Status::Hovered => MayaColors::JADE_GLOW,
+                                        _ => MayaColors::JADE_SHADOW,
+                                    };
+                                    button::Style {
+                                        background: Some(
+                                            Color {
+                                                a: 0.4,
+                                                ..MayaColors::JADE_SHADOW
+                                            }
+                                            .into(),
+                                        ),
+                                        border: Border {
+                                            color: border_color,
+                                            width: 1.0,
+                                            radius: 3.0.into(),
+                                        },
+                                        ..Default::default()
+                                    }
+                                })
+                                .on_press(DiffMessage::StageHunk(hunk_idx).into()),
+                            "Surgically stage this modification block into the index (git add -p)",
+                            Position::Left,
+                        ),
+                        Space::new().width(6),
+                        mayan_tooltip(
+                            button(
+                                text("Discard ↺")
+                                    .size(10)
+                                    .color(MayaColors::CINNABAR_BRIGHT)
+                            )
                             .padding(Padding::from([1, 6]))
                             .style(|_, status| {
                                 let border_color = match status {
@@ -429,54 +613,7 @@ impl DiffWorkbench {
                                     ..Default::default()
                                 }
                             })
-                            .on_press(DiffMessage::UnstageHunk(hunk_idx).into()),
-                        "Surgically unstage this hunk from the index (git restore --staged -p)",
-                        Position::Left,
-                    )
-                } else {
-                    row![
-                        mayan_tooltip(
-                            button(text("Stage Hunk +").size(10).color(MayaColors::JADE_GLOW))
-                                .padding(Padding::from([1, 6]))
-                                .style(|_, status| {
-                                    let border_color = match status {
-                                        button::Status::Hovered => MayaColors::JADE_GLOW,
-                                        _ => MayaColors::JADE_SHADOW,
-                                    };
-                                    button::Style {
-                                        background: Some(Color { a: 0.4, ..MayaColors::JADE_SHADOW }.into()),
-                                        border: Border {
-                                            color: border_color,
-                                            width: 1.0,
-                                            radius: 3.0.into(),
-                                        },
-                                        ..Default::default()
-                                    }
-                                })
-                                .on_press(DiffMessage::StageHunk(hunk_idx).into()),
-                            "Surgically stage this modification block into the index (git add -p)",
-                            Position::Left,
-                        ),
-                        Space::new().width(6),
-                        mayan_tooltip(
-                            button(text("Discard ↺").size(10).color(MayaColors::CINNABAR_BRIGHT))
-                                .padding(Padding::from([1, 6]))
-                                .style(|_, status| {
-                                    let border_color = match status {
-                                        button::Status::Hovered => MayaColors::CINNABAR_BRIGHT,
-                                        _ => MayaColors::OBSIDIAN_BORDER,
-                                    };
-                                    button::Style {
-                                        background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
-                                        border: Border {
-                                            color: border_color,
-                                            width: 1.0,
-                                            radius: 3.0.into(),
-                                        },
-                                        ..Default::default()
-                                    }
-                                })
-                                .on_press(DiffMessage::DiscardHunk(hunk_idx).into()),
+                            .on_press(DiffMessage::DiscardHunk(hunk_idx).into()),
                             "Discard this hunk from the working tree (git checkout --patch)",
                             Position::Left,
                         ),
@@ -489,7 +626,10 @@ impl DiffWorkbench {
                     .padding(Padding::from([1, 6]))
                     .style(|_, _| button::Style {
                         background: Some(Color::TRANSPARENT.into()),
-                        border: Border { width: 0.0, ..Default::default() },
+                        border: Border {
+                            width: 0.0,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     })
                     .into()
@@ -508,7 +648,13 @@ impl DiffWorkbench {
         container(column![hunk_header, lines_col])
             .width(Length::Fill)
             .style(|_theme| container::Style {
-                background: Some(Color { a: 0.85, ..MayaColors::OBSIDIAN_VOID }.into()),
+                background: Some(
+                    Color {
+                        a: 0.85,
+                        ..MayaColors::OBSIDIAN_VOID
+                    }
+                    .into(),
+                ),
                 border: Border {
                     color: MayaColors::OBSIDIAN_BORDER,
                     width: 1.0,
@@ -522,32 +668,38 @@ impl DiffWorkbench {
     fn render_line<'a, Message: 'a>(&'a self, line: &'a DiffLine) -> Element<'a, Message> {
         let (sign, text_color, bg_color) = match line.tag {
             DiffLineTag::Context => (" ", MayaColors::STARLIGHT_WHITE, Color::TRANSPARENT),
-            DiffLineTag::Addition => ("+", MayaColors::JADE_GLOW, Color::from_rgba(0.0, 0.95, 0.60, 0.12)),
-            DiffLineTag::Deletion => ("-", MayaColors::CINNABAR_BRIGHT, Color::from_rgba(1.0, 0.28, 0.35, 0.14)),
+            DiffLineTag::Addition => (
+                "+",
+                MayaColors::JADE_GLOW,
+                Color::from_rgba(0.0, 0.95, 0.60, 0.12),
+            ),
+            DiffLineTag::Deletion => (
+                "-",
+                MayaColors::CINNABAR_BRIGHT,
+                Color::from_rgba(1.0, 0.28, 0.35, 0.14),
+            ),
         };
 
         let old_num_str = line.old_lineno.map(|n| n.to_string()).unwrap_or_default();
         let new_num_str = line.new_lineno.map(|n| n.to_string()).unwrap_or_default();
 
         let gutter = row![
-            text(format!("{:>3}", old_num_str)).size(9).color(MayaColors::GLYPH_DIM),
-            text(format!("{:>3}", new_num_str)).size(9).color(MayaColors::GLYPH_DIM),
+            text(format!("{:>3}", old_num_str))
+                .size(9)
+                .color(MayaColors::GLYPH_DIM),
+            text(format!("{:>3}", new_num_str))
+                .size(9)
+                .color(MayaColors::GLYPH_DIM),
             text(sign).size(10).color(text_color),
         ]
         .spacing(4)
         .align_y(Alignment::Center);
 
-        let code_line = text(&line.content)
-            .size(11)
-            .color(text_color);
+        let code_line = text(&line.content).size(11).color(text_color);
 
-        let content = row![
-            gutter,
-            Space::new().width(8),
-            code_line,
-        ]
-        .padding(Padding::from([1, 6]))
-        .align_y(Alignment::Center);
+        let content = row![gutter, Space::new().width(8), code_line,]
+            .padding(Padding::from([1, 6]))
+            .align_y(Alignment::Center);
 
         container(content)
             .width(Length::Fill)

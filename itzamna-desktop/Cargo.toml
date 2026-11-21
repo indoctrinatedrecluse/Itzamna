@@ -1,6 +1,6 @@
 [package]
 name = "itzamna-desktop"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 description = "Itzamna — GPU-Accelerated Mayan Git Studio"
 authors = ["indoctrinatedrecluse"]
@@ -20,7 +20,11 @@ similar = { version = "2.5", features = ["unicode"] }
 syntect = "5"
 notify = "6"
 redb = "2"
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 toml = "0.8"
 rfd = "0.17.2"
 open = "5.3"
+pulldown-cmark = "0.12"
+tokio-stream = "0.1"
+directories = "5"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+semver = "1"

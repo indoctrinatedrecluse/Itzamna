@@ -49,27 +49,34 @@ impl PopolVuhLogWorkbench {
                 .size(11)
                 .color(MayaColors::SOLAR_GOLD),
             Space::new().width(10),
-            text(format!("Showing {} / {} Ancestral Seals", self.commits.len(), self.total_count))
-                .size(10)
-                .color(MayaColors::GLYPH_DIM),
+            text(format!(
+                "Showing {} / {} Ancestral Seals",
+                self.commits.len(),
+                self.total_count
+            ))
+            .size(10)
+            .color(MayaColors::GLYPH_DIM),
             Space::new().width(Length::Fill),
-            text_input("Filter message or SHA (git log --grep)...", &self.query_input)
-                .size(10)
-                .padding(Padding::from([3, 7]))
-                .width(200)
-                .style(|_theme, _status| text_input::Style {
-                    background: MayaColors::OBSIDIAN_SURFACE.into(),
-                    border: Border {
-                        color: MayaColors::OBSIDIAN_BORDER,
-                        width: 1.0,
-                        radius: 3.0.into(),
-                    },
-                    icon: MayaColors::PARCHMENT_MUTED,
-                    placeholder: MayaColors::GLYPH_DIM,
-                    value: MayaColors::STARLIGHT_WHITE,
-                    selection: MayaColors::JADE_SHADOW,
-                })
-                .on_input(|val| PopolLogMessage::QueryChanged(val).into()),
+            text_input(
+                "Filter message or SHA (git log --grep)...",
+                &self.query_input
+            )
+            .size(10)
+            .padding(Padding::from([3, 7]))
+            .width(200)
+            .style(|_theme, _status| text_input::Style {
+                background: MayaColors::OBSIDIAN_SURFACE.into(),
+                border: Border {
+                    color: MayaColors::OBSIDIAN_BORDER,
+                    width: 1.0,
+                    radius: 3.0.into(),
+                },
+                icon: MayaColors::PARCHMENT_MUTED,
+                placeholder: MayaColors::GLYPH_DIM,
+                value: MayaColors::STARLIGHT_WHITE,
+                selection: MayaColors::JADE_SHADOW,
+            })
+            .on_input(|val| PopolLogMessage::QueryChanged(val).into()),
             Space::new().width(6),
             text_input("Author filter...", &self.author_input)
                 .size(10)
@@ -113,8 +120,12 @@ impl PopolVuhLogWorkbench {
 
         if self.commits.is_empty() {
             commit_cards = commit_cards.push(
-                container(text("No ancestral seals match the glyph query.").size(11).color(MayaColors::GLYPH_DIM))
-                    .padding(16)
+                container(
+                    text("No ancestral seals match the glyph query.")
+                        .size(11)
+                        .color(MayaColors::GLYPH_DIM),
+                )
+                .padding(16),
             );
         }
 
@@ -122,14 +133,19 @@ impl PopolVuhLogWorkbench {
             commit_cards = commit_cards.push(self.render_commit_card(commit));
         }
 
-        let body = scrollable(commit_cards.padding(Padding::from([8, 12])))
-            .height(Length::Fill);
+        let body = scrollable(commit_cards.padding(Padding::from([8, 12]))).height(Length::Fill);
 
         container(column![title_bar, body])
             .width(Length::Fill)
             .height(Length::Fill)
             .style(|_theme| container::Style {
-                background: Some(Color { a: 0.60, ..MayaColors::OBSIDIAN_BASE }.into()),
+                background: Some(
+                    Color {
+                        a: 0.60,
+                        ..MayaColors::OBSIDIAN_BASE
+                    }
+                    .into(),
+                ),
                 border: Border {
                     color: MayaColors::OBSIDIAN_BORDER,
                     width: 0.0,
@@ -148,16 +164,20 @@ impl PopolVuhLogWorkbench {
             let mut r = row![].spacing(3).align_y(Alignment::Center);
             for t in &commit.tags {
                 r = r.push(
-                    container(text(format!("🏷️ {}", t)).size(8).color(MayaColors::OBSIDIAN_VOID))
-                        .padding(Padding::from([1, 4]))
-                        .style(|_theme| container::Style {
-                            background: Some(MayaColors::SOLAR_AMBER.into()),
-                            border: Border {
-                                radius: 2.0.into(),
-                                ..Default::default()
-                            },
+                    container(
+                        text(format!("🏷️ {}", t))
+                            .size(8)
+                            .color(MayaColors::OBSIDIAN_VOID),
+                    )
+                    .padding(Padding::from([1, 4]))
+                    .style(|_theme| container::Style {
+                        background: Some(MayaColors::SOLAR_AMBER.into()),
+                        border: Border {
+                            radius: 2.0.into(),
                             ..Default::default()
-                        })
+                        },
+                        ..Default::default()
+                    }),
                 );
             }
             r
@@ -167,7 +187,9 @@ impl PopolVuhLogWorkbench {
 
         let card_header = row![
             text("☀️ ").size(10),
-            text(&commit.short_sha).size(10).color(MayaColors::SOLAR_GOLD),
+            text(&commit.short_sha)
+                .size(10)
+                .color(MayaColors::SOLAR_GOLD),
             Space::new().width(6),
             tag_chips,
             Space::new().width(8),
@@ -177,9 +199,13 @@ impl PopolVuhLogWorkbench {
                 .wrapping(text::Wrapping::Word)
                 .width(Length::Fill),
             Space::new().width(8),
-            text(&commit.author_name).size(10).color(MayaColors::JADE_GLOW),
+            text(&commit.author_name)
+                .size(10)
+                .color(MayaColors::JADE_GLOW),
             Space::new().width(6),
-            text(&commit.relative_time).size(9).color(MayaColors::GLYPH_DIM),
+            text(&commit.relative_time)
+                .size(9)
+                .color(MayaColors::GLYPH_DIM),
             Space::new().width(8),
             tooltip(
                 button(text("Inspect Diff →").size(9).color(MayaColors::SOLAR_GOLD))
@@ -204,7 +230,13 @@ impl PopolVuhLogWorkbench {
             .width(Length::Fill)
             .padding(Padding::from([6, 10]))
             .style(|_theme| container::Style {
-                background: Some(Color { a: 0.30, ..MayaColors::OBSIDIAN_SURFACE }.into()),
+                background: Some(
+                    Color {
+                        a: 0.30,
+                        ..MayaColors::OBSIDIAN_SURFACE
+                    }
+                    .into(),
+                ),
                 border: Border {
                     color: MayaColors::OBSIDIAN_BORDER,
                     width: 1.0,

@@ -3,7 +3,7 @@
 
 #define MyAppName "Itzamna"
 #define MyAppFullName "Itzamná — Mesoamerican Git Studio"
-#define MyAppVersion "0.1.2"
+#define MyAppVersion "0.1.3"
 #define MyAppPublisher "indoctrinatedrecluse"
 #define MyAppURL "https://github.com/indoctrinatedrecluse/Itzamna"
 #define MyAppExeName "itzamna-desktop.exe"
@@ -61,7 +61,6 @@ Source: "..\itzamna-desktop\assets\background.mp4"; DestDir: "{tmp}"; Flags: don
 ; Installed Application Payload
 Source: "..\target\release\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\itzamna-desktop\assets\*"; DestDir: "{app}\assets"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "..\ixchel.jar"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 
 [Icons]
 Name: "{group}\{#MyAppFullName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\assets\icon.ico"

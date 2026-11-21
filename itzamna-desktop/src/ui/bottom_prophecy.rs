@@ -100,7 +100,13 @@ impl BottomProphecy {
         }
     }
 
-    pub fn push(&mut self, timestamp: &str, glyph: &'static str, msg: String, level: ProphecyLevel) {
+    pub fn push(
+        &mut self,
+        timestamp: &str,
+        glyph: &'static str,
+        msg: String,
+        level: ProphecyLevel,
+    ) {
         let ts = if timestamp.is_empty() || timestamp == "23:55:00" {
             chrono::Local::now().format("%H:%M:%S").to_string()
         } else {
@@ -125,9 +131,17 @@ impl BottomProphecy {
 
     pub fn view<'a, Message: 'a + From<ProphecyMessage> + Clone>(&'a self) -> Element<'a, Message> {
         let (height_val, cycle_icon, cycle_tooltip) = match self.height_mode {
-            ProphecyHeight::Minimized => (28.0, "▲ Expand", "Expand console drawer to standard height"),
-            ProphecyHeight::Standard => (96.0, "⤢ Panoramic", "Expand console drawer to full panoramic height"),
-            ProphecyHeight::Expanded => (180.0, "▼ Compact", "Minimize console drawer to single bar"),
+            ProphecyHeight::Minimized => {
+                (28.0, "▲ Expand", "Expand console drawer to standard height")
+            }
+            ProphecyHeight::Standard => (
+                96.0,
+                "⤢ Panoramic",
+                "Expand console drawer to full panoramic height",
+            ),
+            ProphecyHeight::Expanded => {
+                (180.0, "▼ Compact", "Minimize console drawer to single bar")
+            }
         };
 
         // Header Row
@@ -136,13 +150,20 @@ impl BottomProphecy {
                 .size(10)
                 .color(MayaColors::SOLAR_GOLD),
             Space::new().width(8),
-            container(text(format!("{} LOGS RECORDED", self.entries.len())).size(8).color(MayaColors::OBSIDIAN_VOID))
-                .padding(Padding::from([1, 5]))
-                .style(|_| container::Style {
-                    background: Some(MayaColors::JADE_GLOW.into()),
-                    border: Border { radius: 2.0.into(), ..Default::default() },
+            container(
+                text(format!("{} LOGS RECORDED", self.entries.len()))
+                    .size(8)
+                    .color(MayaColors::OBSIDIAN_VOID)
+            )
+            .padding(Padding::from([1, 5]))
+            .style(|_| container::Style {
+                background: Some(MayaColors::JADE_GLOW.into()),
+                border: Border {
+                    radius: 2.0.into(),
                     ..Default::default()
-                }),
+                },
+                ..Default::default()
+            }),
             Space::new().width(12),
             // Filter Pills in Header
             self.filter_pill(None, "ALL"),
@@ -160,7 +181,11 @@ impl BottomProphecy {
                     .padding(Padding::from([2, 6]))
                     .style(|_, _| button::Style {
                         background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
-                        border: Border { color: MayaColors::OBSIDIAN_BORDER, width: 1.0, radius: 3.0.into() },
+                        border: Border {
+                            color: MayaColors::OBSIDIAN_BORDER,
+                            width: 1.0,
+                            radius: 3.0.into()
+                        },
                         ..Default::default()
                     })
                     .on_press(ProphecyMessage::CycleHeight.into()),
@@ -173,7 +198,11 @@ impl BottomProphecy {
                     .padding(Padding::from([2, 6]))
                     .style(|_, _| button::Style {
                         background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
-                        border: Border { color: MayaColors::OBSIDIAN_BORDER, width: 1.0, radius: 3.0.into() },
+                        border: Border {
+                            color: MayaColors::OBSIDIAN_BORDER,
+                            width: 1.0,
+                            radius: 3.0.into()
+                        },
                         ..Default::default()
                     })
                     .on_press(ProphecyMessage::ClearFeed.into()),
@@ -189,7 +218,13 @@ impl BottomProphecy {
                 .width(Length::Fill)
                 .height(28)
                 .style(|_theme| container::Style {
-                    background: Some(Color { a: 0.96, ..MayaColors::OBSIDIAN_BASE }.into()),
+                    background: Some(
+                        Color {
+                            a: 0.96,
+                            ..MayaColors::OBSIDIAN_BASE
+                        }
+                        .into(),
+                    ),
                     border: Border {
                         color: MayaColors::OBSIDIAN_BORDER,
                         width: 1.0,
@@ -205,40 +240,72 @@ impl BottomProphecy {
             .entries
             .iter()
             .rev()
-            .filter(|e| self.active_filter.map_or(true, |f| e.level == f))
+            .filter(|e| self.active_filter.is_none_or(|f| e.level == f))
             .collect();
 
         // 1. Left Telemetry Sub-Panel (20% width)
-        let solar_count = self.entries.iter().filter(|e| e.level == ProphecyLevel::Solar).count();
-        let jade_count = self.entries.iter().filter(|e| e.level == ProphecyLevel::Jade).count();
-        let maya_count = self.entries.iter().filter(|e| e.level == ProphecyLevel::Maya).count();
-        let xibalba_count = self.entries.iter().filter(|e| e.level == ProphecyLevel::Xibalba).count();
+        let solar_count = self
+            .entries
+            .iter()
+            .filter(|e| e.level == ProphecyLevel::Solar)
+            .count();
+        let jade_count = self
+            .entries
+            .iter()
+            .filter(|e| e.level == ProphecyLevel::Jade)
+            .count();
+        let maya_count = self
+            .entries
+            .iter()
+            .filter(|e| e.level == ProphecyLevel::Maya)
+            .count();
+        let xibalba_count = self
+            .entries
+            .iter()
+            .filter(|e| e.level == ProphecyLevel::Xibalba)
+            .count();
 
         let telemetry_panel = container(
             column![
-                text("TELEMETRY VECTORS").size(8).color(MayaColors::GLYPH_DIM),
+                text("TELEMETRY VECTORS")
+                    .size(8)
+                    .color(MayaColors::GLYPH_DIM),
                 Space::new().height(4),
                 row![
                     text("☀️ Commits: ").size(8).color(MayaColors::GLYPH_DIM),
-                    text(format!("{}", solar_count)).size(9).color(MayaColors::SOLAR_GOLD),
+                    text(format!("{}", solar_count))
+                        .size(9)
+                        .color(MayaColors::SOLAR_GOLD),
                     Space::new().width(8),
                     text("🌱 Refs: ").size(8).color(MayaColors::GLYPH_DIM),
-                    text(format!("{}", jade_count)).size(9).color(MayaColors::JADE_GLOW),
+                    text(format!("{}", jade_count))
+                        .size(9)
+                        .color(MayaColors::JADE_GLOW),
                 ],
                 Space::new().height(2),
                 row![
                     text("🌐 Conduit: ").size(8).color(MayaColors::GLYPH_DIM),
-                    text(format!("{}", maya_count)).size(9).color(MayaColors::MAYA_BLUE),
+                    text(format!("{}", maya_count))
+                        .size(9)
+                        .color(MayaColors::MAYA_BLUE),
                     Space::new().width(8),
                     text("⚠️ Alerts: ").size(8).color(MayaColors::GLYPH_DIM),
-                    text(format!("{}", xibalba_count)).size(9).color(MayaColors::CINNABAR_BRIGHT),
+                    text(format!("{}", xibalba_count))
+                        .size(9)
+                        .color(MayaColors::CINNABAR_BRIGHT),
                 ],
             ]
-            .padding(Padding::from([4, 8]))
+            .padding(Padding::from([4, 8])),
         )
         .width(Length::Fixed(190.0))
         .style(|_| container::Style {
-            background: Some(Color { a: 0.5, ..MayaColors::OBSIDIAN_SURFACE }.into()),
+            background: Some(
+                Color {
+                    a: 0.5,
+                    ..MayaColors::OBSIDIAN_SURFACE
+                }
+                .into(),
+            ),
             border: Border {
                 color: MayaColors::OBSIDIAN_BORDER,
                 width: 1.0,
@@ -263,7 +330,11 @@ impl BottomProphecy {
                     .padding(Padding::from([1, 4]))
                     .style(move |_| container::Style {
                         background: Some(badge_bg.into()),
-                        border: Border { color, width: 0.5, radius: 2.0.into() },
+                        border: Border {
+                            color,
+                            width: 0.5,
+                            radius: 2.0.into()
+                        },
                         ..Default::default()
                     }),
                 Space::new().width(6),
@@ -278,33 +349,42 @@ impl BottomProphecy {
             .padding(Padding::from([2, 4]))
             .align_y(Alignment::Center);
 
-            log_list = log_list.push(
-                container(log_row)
-                    .width(Length::Fill)
-                    .style(|_| container::Style {
-                        background: Some(Color { a: 0.15, ..MayaColors::OBSIDIAN_SURFACE }.into()),
-                        border: Border { radius: 2.0.into(), ..Default::default() },
+            log_list = log_list.push(container(log_row).width(Length::Fill).style(|_| {
+                container::Style {
+                    background: Some(
+                        Color {
+                            a: 0.15,
+                            ..MayaColors::OBSIDIAN_SURFACE
+                        }
+                        .into(),
+                    ),
+                    border: Border {
+                        radius: 2.0.into(),
                         ..Default::default()
-                    })
-            );
+                    },
+                    ..Default::default()
+                }
+            }));
         }
 
         let log_stream = scrollable(log_list.padding(Padding::from([2, 6]))).width(Length::Fill);
 
-        let panoramic_body = row![
-            telemetry_panel,
-            Space::new().width(6),
-            log_stream,
-        ]
-        .padding(Padding::from([2, 8]))
-        .width(Length::Fill)
-        .height(Length::Fill);
+        let panoramic_body = row![telemetry_panel, Space::new().width(6), log_stream,]
+            .padding(Padding::from([2, 8]))
+            .width(Length::Fill)
+            .height(Length::Fill);
 
         container(column![header, panoramic_body])
             .width(Length::Fill)
             .height(height_val)
             .style(|_theme| container::Style {
-                background: Some(Color { a: 0.96, ..MayaColors::OBSIDIAN_BASE }.into()),
+                background: Some(
+                    Color {
+                        a: 0.96,
+                        ..MayaColors::OBSIDIAN_BASE
+                    }
+                    .into(),
+                ),
                 border: Border {
                     color: MayaColors::OBSIDIAN_BORDER,
                     width: 1.0,
@@ -323,7 +403,10 @@ impl BottomProphecy {
         let is_active = self.active_filter == target;
         let (bg, border_color, text_color) = if is_active {
             (
-                Color { a: 0.35, ..MayaColors::SOLAR_GOLD },
+                Color {
+                    a: 0.35,
+                    ..MayaColors::SOLAR_GOLD
+                },
                 MayaColors::SOLAR_GOLD,
                 MayaColors::SOLAR_GOLD,
             )
@@ -339,7 +422,11 @@ impl BottomProphecy {
             .padding(Padding::from([1, 5]))
             .style(move |_, _| button::Style {
                 background: Some(bg.into()),
-                border: Border { color: border_color, width: 0.8, radius: 2.0.into() },
+                border: Border {
+                    color: border_color,
+                    width: 0.8,
+                    radius: 2.0.into(),
+                },
                 ..Default::default()
             })
             .on_press(ProphecyMessage::FilterLevel(target).into())

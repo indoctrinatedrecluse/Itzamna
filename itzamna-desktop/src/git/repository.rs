@@ -8,6 +8,28 @@ use std::path::Path;
 
 use crate::git::detailed_commit::DetailedCommit;
 
+fn command_report(stdout: &[u8], stderr: &[u8], fallback: &str) -> String {
+    let stdout = String::from_utf8_lossy(stdout)
+        .chars()
+        .filter(|c| !c.is_control() || *c == '\n' || *c == '\t')
+        .collect::<String>();
+    let stderr = String::from_utf8_lossy(stderr)
+        .replace('\r', "\n")
+        .chars()
+        .filter(|c| !c.is_control() || *c == '\n' || *c == '\t')
+        .collect::<String>();
+    let combined = [stdout.trim().to_string(), stderr.trim().to_string()]
+        .into_iter()
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n");
+    if combined.is_empty() {
+        fallback.to_string()
+    } else {
+        combined
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct BlameLineInfo {
     pub line_no: usize,
@@ -87,6 +109,7 @@ pub struct GitCommitNode {
     pub branch_lane: usize,
     pub is_head: bool,
     pub tags: Vec<String>,
+    pub branches: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -106,12 +129,166 @@ impl GitSanctuary {
         Ok(Self { repo })
     }
 
+    /// Compute repository telemetry from real commits, diffs, release tags, and authors.
+    pub fn calculate_local_telemetry(
+        &self,
+    ) -> Result<crate::git::telemetry::RepoHealthOverview, String> {
+        use std::collections::HashMap;
+        let mut walk = self.repo.revwalk().map_err(|e| e.to_string())?;
+        walk.push_head().map_err(|e| e.to_string())?;
+        walk.set_sorting(git2::Sort::TIME | git2::Sort::TOPOLOGICAL)
+            .map_err(|e| e.to_string())?;
+        let now = chrono::Utc::now().timestamp();
+        let mut author_counts: HashMap<(String, String), usize> = HashMap::new();
+        let mut commit_count = 0usize;
+        let mut added = 0u64;
+        let mut deleted = 0u64;
+        let mut failures = 0usize;
+        let mut merge_lead_hours = Vec::new();
+        for oid in walk.take(500) {
+            let commit = self
+                .repo
+                .find_commit(oid.map_err(|e| e.to_string())?)
+                .map_err(|e| e.to_string())?;
+            let message = commit.summary().unwrap_or("").to_lowercase();
+            if message.starts_with("fix")
+                || message.starts_with("revert")
+                || message.contains("bugfix")
+            {
+                failures += 1;
+            }
+            let author = commit.author();
+            *author_counts
+                .entry((
+                    author.name().unwrap_or("Unknown").to_string(),
+                    author.email().unwrap_or("").to_string(),
+                ))
+                .or_default() += 1;
+            if commit.parent_count() > 1 {
+                if let Ok(parent) = commit.parent(1) {
+                    merge_lead_hours.push(
+                        ((commit.time().seconds() - parent.time().seconds()).max(0) as f64)
+                            / 3600.0,
+                    );
+                }
+            }
+            let tree = commit.tree().map_err(|e| e.to_string())?;
+            let diff = if commit.parent_count() > 0 {
+                let parent = commit.parent(0).map_err(|e| e.to_string())?;
+                self.repo
+                    .diff_tree_to_tree(
+                        Some(&parent.tree().map_err(|e| e.to_string())?),
+                        Some(&tree),
+                        None,
+                    )
+                    .map_err(|e| e.to_string())?
+            } else {
+                self.repo
+                    .diff_tree_to_tree(None, Some(&tree), None)
+                    .map_err(|e| e.to_string())?
+            };
+            let stats = diff.stats().map_err(|e| e.to_string())?;
+            added += stats.insertions() as u64;
+            deleted += stats.deletions() as u64;
+            commit_count += 1;
+        }
+        let mut recent_release_tags = 0usize;
+        for tag in self
+            .repo
+            .tag_names(None)
+            .map_err(|e| e.to_string())?
+            .iter()
+            .flatten()
+        {
+            if let Ok(obj) = self.repo.revparse_single(tag) {
+                if let Ok(target) = obj.peel_to_commit() {
+                    let age_seconds = now - target.time().seconds();
+                    if (0..=90 * 24 * 60 * 60).contains(&age_seconds) {
+                        recent_release_tags += 1;
+                    }
+                }
+            }
+        }
+        let release_tags = recent_release_tags;
+        let total_commits = commit_count.max(1);
+        let mut contributors: Vec<_> = author_counts
+            .into_iter()
+            .map(
+                |((name, email), count)| crate::git::telemetry::ContributorInsight {
+                    name,
+                    email,
+                    commit_count: count,
+                    ownership_percent: count as f64 * 100.0 / total_commits as f64,
+                },
+            )
+            .collect();
+        contributors.sort_by_key(|c| std::cmp::Reverse(c.commit_count));
+        let mut bus_factor = 0usize;
+        let mut covered = 0usize;
+        for contributor in &contributors {
+            bus_factor += 1;
+            covered += contributor.commit_count;
+            if covered * 2 >= total_commits {
+                break;
+            }
+        }
+        let failure_rate = failures as f64 * 100.0 / total_commits as f64;
+        let lead_time = if merge_lead_hours.is_empty() {
+            0.0
+        } else {
+            merge_lead_hours.iter().sum::<f64>() / merge_lead_hours.len() as f64
+        };
+        let health = if commit_count == 0 {
+            0
+        } else {
+            (100.0 - failure_rate).round().clamp(0.0, 100.0) as u32
+        };
+        let tier = if release_tags >= 90 {
+            "Elite"
+        } else if release_tags >= 30 {
+            "High"
+        } else if release_tags >= 6 {
+            "Medium"
+        } else if release_tags == 0 {
+            "No deployments"
+        } else {
+            "Low"
+        };
+        let risk = if bus_factor == 0 {
+            "Unknown"
+        } else if bus_factor == 1 {
+            "High"
+        } else if bus_factor <= 3 {
+            "Moderate"
+        } else {
+            "Low"
+        };
+        Ok(crate::git::telemetry::RepoHealthOverview {
+            health_score: health,
+            dora: crate::git::telemetry::DoraMetrics {
+                deployment_frequency: release_tags as f64 / 90.0,
+                lead_time_hours: lead_time,
+                change_failure_rate: failure_rate,
+                mttr_minutes: 0.0,
+                tier: tier.to_string(),
+            },
+            churn: crate::git::telemetry::ChurnMetrics {
+                lines_added: added,
+                lines_deleted: deleted,
+                lines_modified: added.min(deleted),
+                net_growth: added as i64 - deleted as i64,
+            },
+            top_contributors: contributors,
+            bus_factor: crate::git::telemetry::BusFactor {
+                score: bus_factor,
+                risk_level: risk.to_string(),
+            },
+        })
+    }
+
     pub fn get_head_info(&self) -> (String, String) {
         let branch = match self.repo.head() {
-            Ok(head) => head
-                .shorthand()
-                .unwrap_or("detached HEAD")
-                .to_string(),
+            Ok(head) => head.shorthand().unwrap_or("detached HEAD").to_string(),
             Err(_) => "empty codex".to_string(),
         };
 
@@ -179,20 +356,44 @@ impl GitSanctuary {
 
                 // Staged checks
                 if status.is_index_new() {
-                    staged.push(FileStatus { path: path.clone(), status_code: "A", is_staged: true });
+                    staged.push(FileStatus {
+                        path: path.clone(),
+                        status_code: "A",
+                        is_staged: true,
+                    });
                 } else if status.is_index_modified() {
-                    staged.push(FileStatus { path: path.clone(), status_code: "M", is_staged: true });
+                    staged.push(FileStatus {
+                        path: path.clone(),
+                        status_code: "M",
+                        is_staged: true,
+                    });
                 } else if status.is_index_deleted() {
-                    staged.push(FileStatus { path: path.clone(), status_code: "D", is_staged: true });
+                    staged.push(FileStatus {
+                        path: path.clone(),
+                        status_code: "D",
+                        is_staged: true,
+                    });
                 }
 
                 // Unstaged checks
                 if status.is_wt_new() {
-                    unstaged.push(FileStatus { path, status_code: "?", is_staged: false });
+                    unstaged.push(FileStatus {
+                        path,
+                        status_code: "?",
+                        is_staged: false,
+                    });
                 } else if status.is_wt_modified() {
-                    unstaged.push(FileStatus { path, status_code: "M", is_staged: false });
+                    unstaged.push(FileStatus {
+                        path,
+                        status_code: "M",
+                        is_staged: false,
+                    });
                 } else if status.is_wt_deleted() {
-                    unstaged.push(FileStatus { path, status_code: "D", is_staged: false });
+                    unstaged.push(FileStatus {
+                        path,
+                        status_code: "D",
+                        is_staged: false,
+                    });
                 }
             }
         }
@@ -208,12 +409,90 @@ impl GitSanctuary {
             Err(_) => return nodes,
         };
 
+        // Push HEAD
         let _ = revwalk.push_head();
+
+        // Push all local branch tips
+        if let Ok(branches) = self.repo.branches(Some(BranchType::Local)) {
+            for b in branches.flatten() {
+                if let Some(target) = b.0.get().target() {
+                    let _ = revwalk.push(target);
+                }
+            }
+        }
+
+        // Push all remote branch tips
+        if let Ok(branches) = self.repo.branches(Some(BranchType::Remote)) {
+            for b in branches.flatten() {
+                if let Some(target) = b.0.get().target() {
+                    let _ = revwalk.push(target);
+                }
+            }
+        }
+
+        // Push all tags
+        if let Ok(tag_names) = self.repo.tag_names(None) {
+            for tag in tag_names.iter().flatten() {
+                if let Ok(obj) = self.repo.revparse_single(tag) {
+                    let _ = revwalk.push(obj.id());
+                }
+            }
+        }
+
         let _ = revwalk.set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::TIME);
 
+        // Pre-build Branch & Tag Maps
         let head_oid = self.repo.head().ok().and_then(|h| h.target());
+        let head_branch_name = self
+            .repo
+            .head()
+            .ok()
+            .and_then(|h| h.shorthand().map(|s| s.to_string()));
 
-        for (idx, oid_res) in revwalk.take(max_commits).enumerate() {
+        let mut branch_map: std::collections::HashMap<Oid, Vec<String>> =
+            std::collections::HashMap::new();
+        if let Ok(branches) = self.repo.branches(Some(BranchType::Local)) {
+            for b in branches.flatten() {
+                if let (Some(target), Ok(Some(name))) = (b.0.get().target(), b.0.name()) {
+                    let is_active_head = head_branch_name.as_deref() == Some(name);
+                    let display_name = if is_active_head {
+                        format!("HEAD -> {}", name)
+                    } else {
+                        name.to_string()
+                    };
+                    branch_map.entry(target).or_default().push(display_name);
+                }
+            }
+        }
+
+        if let Ok(branches) = self.repo.branches(Some(BranchType::Remote)) {
+            for b in branches.flatten() {
+                if let (Some(target), Ok(Some(name))) = (b.0.get().target(), b.0.name()) {
+                    branch_map.entry(target).or_default().push(name.to_string());
+                }
+            }
+        }
+
+        let mut tag_map: std::collections::HashMap<Oid, Vec<String>> =
+            std::collections::HashMap::new();
+        if let Ok(tag_names) = self.repo.tag_names(None) {
+            for tag in tag_names.iter().flatten() {
+                if let Ok(obj) = self.repo.revparse_single(tag) {
+                    if let Ok(commit) = obj.peel_to_commit() {
+                        tag_map
+                            .entry(commit.id())
+                            .or_default()
+                            .push(tag.to_string());
+                    } else {
+                        tag_map.entry(obj.id()).or_default().push(tag.to_string());
+                    }
+                }
+            }
+        }
+
+        let now = chrono::Utc::now().timestamp();
+
+        for oid_res in revwalk.take(max_commits) {
             let oid = match oid_res {
                 Ok(id) => id,
                 Err(_) => continue,
@@ -234,18 +513,11 @@ impl GitSanctuary {
 
             let parents = commit
                 .parent_ids()
-                .map(|p| p.to_string()[..7].to_string())
+                .map(|p| p.to_string())
                 .collect::<Vec<_>>();
 
             let is_head = head_oid.map(|h| h == oid).unwrap_or(false);
 
-            let branch_lane = if idx == 0 || parents.len() <= 1 {
-                0
-            } else {
-                1
-            };
-
-            let now = chrono::Utc::now().timestamp();
             let diff_mins = ((now - time_secs) / 60).max(1);
             let relative_time = if diff_mins < 60 {
                 format!("{} min ago", diff_mins)
@@ -254,6 +526,9 @@ impl GitSanctuary {
             } else {
                 format!("{} days ago", diff_mins / 1440)
             };
+
+            let tags = tag_map.get(&oid).cloned().unwrap_or_default();
+            let branches = branch_map.get(&oid).cloned().unwrap_or_default();
 
             nodes.push(GitCommitNode {
                 sha,
@@ -264,13 +539,84 @@ impl GitSanctuary {
                 time_secs,
                 relative_time,
                 parents,
-                branch_lane,
+                branch_lane: 0,
                 is_head,
-                tags: Vec::new(),
+                tags,
+                branches,
             });
         }
 
+        // Apply topological lane packing algorithm
+        Self::assign_topological_lanes(&mut nodes);
+
         nodes
+    }
+
+    /// Topological Lane Packing Algorithm for Git commit graphs
+    pub fn assign_topological_lanes(nodes: &mut [GitCommitNode]) {
+        let mut active_lanes: Vec<Option<String>> = Vec::new();
+
+        for node in nodes.iter_mut() {
+            // Check if this commit is expected in an already active lane
+            let existing_lane = active_lanes.iter().position(|lane| {
+                if let Some(target) = lane {
+                    target == &node.sha || target == &node.short_sha
+                } else {
+                    false
+                }
+            });
+
+            let assigned_lane = match existing_lane {
+                Some(lane) => lane,
+                None => {
+                    // Reuse first empty slot or expand
+                    if let Some(free_slot) = active_lanes.iter().position(|l| l.is_none()) {
+                        free_slot
+                    } else {
+                        active_lanes.push(None);
+                        active_lanes.len() - 1
+                    }
+                }
+            };
+
+            node.branch_lane = assigned_lane;
+            for (lane_index, lane) in active_lanes.iter_mut().enumerate() {
+                if lane_index != assigned_lane
+                    && lane
+                        .as_deref()
+                        .is_some_and(|sha| sha == node.sha || sha == node.short_sha)
+                {
+                    *lane = None;
+                }
+            }
+
+            // Route parent commits
+            if node.parents.is_empty() {
+                // Root commit finishes this lane
+                active_lanes[assigned_lane] = None;
+            } else {
+                // First parent inherits this lane
+                active_lanes[assigned_lane] = Some(node.parents[0].clone());
+
+                // Additional parents (merges) get allocated or reuse existing lanes
+                for parent_sha in node.parents.iter().skip(1) {
+                    let already_assigned =
+                        active_lanes.iter().any(|l| l.as_ref() == Some(parent_sha));
+                    if !already_assigned {
+                        if let Some(free_slot) = active_lanes.iter().position(|l| l.is_none()) {
+                            active_lanes[free_slot] = Some(parent_sha.clone());
+                        } else {
+                            active_lanes.push(Some(parent_sha.clone()));
+                        }
+                    }
+                }
+            }
+
+            // Trim trailing inactive lanes
+            while active_lanes.last() == Some(&None) {
+                active_lanes.pop();
+            }
+        }
     }
 
     pub fn find_detailed_commit(&self, short_or_full_sha: &str) -> Option<DetailedCommit> {
@@ -298,9 +644,7 @@ impl GitSanctuary {
 
     pub fn stage_path(&self, path: &str) -> Result<(), String> {
         let mut index = self.repo.index().map_err(|e| e.to_string())?;
-        index
-            .add_path(Path::new(path))
-            .map_err(|e| e.to_string())?;
+        index.add_path(Path::new(path)).map_err(|e| e.to_string())?;
         index.write().map_err(|e| e.to_string())?;
         Ok(())
     }
@@ -350,17 +694,31 @@ impl GitSanctuary {
         Ok(())
     }
 
-    pub fn get_working_diff_counts(&self, is_staged: bool) -> std::collections::HashMap<String, (usize, usize)> {
+    pub fn get_working_diff_counts(
+        &self,
+        is_staged: bool,
+    ) -> std::collections::HashMap<String, (usize, usize)> {
         let mut map = std::collections::HashMap::new();
         let mut opts = git2::DiffOptions::new();
 
         let diff_res = if is_staged {
-            let head_tree = self.repo.head().ok().and_then(|h| h.peel_to_commit().ok()).and_then(|c| c.tree().ok());
+            let head_tree = self
+                .repo
+                .head()
+                .ok()
+                .and_then(|h| h.peel_to_commit().ok())
+                .and_then(|c| c.tree().ok());
             let index = self.repo.index().ok();
-            index.and_then(|idx| self.repo.diff_tree_to_index(head_tree.as_ref(), Some(&idx), Some(&mut opts)).ok())
+            index.and_then(|idx| {
+                self.repo
+                    .diff_tree_to_index(head_tree.as_ref(), Some(&idx), Some(&mut opts))
+                    .ok()
+            })
         } else {
             let index = self.repo.index().ok();
-            self.repo.diff_index_to_workdir(index.as_ref(), Some(&mut opts)).ok()
+            self.repo
+                .diff_index_to_workdir(index.as_ref(), Some(&mut opts))
+                .ok()
         };
 
         if let Some(diff) = diff_res {
@@ -395,7 +753,9 @@ impl GitSanctuary {
 
         if let Some(mut stdin) = child.stdin.take() {
             use std::io::Write;
-            stdin.write_all(patch.as_bytes()).map_err(|e| e.to_string())?;
+            stdin
+                .write_all(patch.as_bytes())
+                .map_err(|e| e.to_string())?;
         }
 
         let output = child.wait_with_output().map_err(|e| e.to_string())?;
@@ -418,7 +778,9 @@ impl GitSanctuary {
 
         if let Some(mut stdin) = child.stdin.take() {
             use std::io::Write;
-            stdin.write_all(patch.as_bytes()).map_err(|e| e.to_string())?;
+            stdin
+                .write_all(patch.as_bytes())
+                .map_err(|e| e.to_string())?;
         }
 
         let output = child.wait_with_output().map_err(|e| e.to_string())?;
@@ -441,7 +803,9 @@ impl GitSanctuary {
 
         if let Some(mut stdin) = child.stdin.take() {
             use std::io::Write;
-            stdin.write_all(patch.as_bytes()).map_err(|e| e.to_string())?;
+            stdin
+                .write_all(patch.as_bytes())
+                .map_err(|e| e.to_string())?;
         }
 
         let output = child.wait_with_output().map_err(|e| e.to_string())?;
@@ -512,14 +876,7 @@ impl GitSanctuary {
 
         let commit_oid = self
             .repo
-            .commit(
-                Some("HEAD"),
-                &sig,
-                &sig,
-                &full_msg,
-                &tree,
-                &parents,
-            )
+            .commit(Some("HEAD"), &sig, &sig, &full_msg, &tree, &parents)
             .map_err(|e| e.to_string())?;
 
         Ok(commit_oid.to_string())
@@ -557,79 +914,203 @@ impl GitSanctuary {
 
     pub fn get_local_credentials(&self) -> (String, String, String) {
         let config = self.repo.config().ok();
-        let name = config.as_ref().and_then(|c| c.get_string("user.name").ok()).unwrap_or_default();
-        let email = config.as_ref().and_then(|c| c.get_string("user.email").ok()).unwrap_or_default();
-        let remote_url = self.repo.find_remote("origin").ok().and_then(|r| r.url().map(|s| s.to_string())).unwrap_or_default();
+        let name = config
+            .as_ref()
+            .and_then(|c| c.get_string("user.name").ok())
+            .unwrap_or_default();
+        let email = config
+            .as_ref()
+            .and_then(|c| c.get_string("user.email").ok())
+            .unwrap_or_default();
+        let remote_url = self
+            .repo
+            .find_remote("origin")
+            .ok()
+            .and_then(|r| r.url().map(|s| s.to_string()))
+            .unwrap_or_default();
         (name, email, remote_url)
     }
 
-    pub fn set_local_credentials(&self, name: &str, email: &str, remote_url: &str) -> Result<(), String> {
+    pub fn set_local_credentials(
+        &self,
+        name: &str,
+        email: &str,
+        remote_url: &str,
+    ) -> Result<(), String> {
         let mut config = self.repo.config().map_err(|e| e.to_string())?;
-        config.set_str("user.name", name).map_err(|e| e.to_string())?;
-        config.set_str("user.email", email).map_err(|e| e.to_string())?;
+        config
+            .set_str("user.name", name)
+            .map_err(|e| e.to_string())?;
+        config
+            .set_str("user.email", email)
+            .map_err(|e| e.to_string())?;
 
         if !remote_url.is_empty() {
             if self.repo.find_remote("origin").is_ok() {
-                self.repo.remote_set_url("origin", remote_url).map_err(|e| e.to_string())?;
+                self.repo
+                    .remote_set_url("origin", remote_url)
+                    .map_err(|e| e.to_string())?;
             } else {
-                self.repo.remote("origin", remote_url).map_err(|e| e.to_string())?;
+                self.repo
+                    .remote("origin", remote_url)
+                    .map_err(|e| e.to_string())?;
             }
         }
         Ok(())
     }
 
     pub fn push_origin(&self, branch_name: &str) -> Result<String, String> {
+        self.push_origin_with_lease(branch_name, false)
+    }
+
+    pub fn push_origin_with_lease(
+        &self,
+        branch_name: &str,
+        force_with_lease: bool,
+    ) -> Result<String, String> {
+        self.push_origin_with_progress(branch_name, force_with_lease, |_| {})
+    }
+
+    pub fn push_origin_with_progress(
+        &self,
+        branch_name: &str,
+        force_with_lease: bool,
+        mut progress: impl FnMut(String),
+    ) -> Result<String, String> {
         let branch = if branch_name.is_empty() || branch_name == "detached HEAD" {
             "HEAD"
         } else {
             branch_name
         };
-        let output = std::process::Command::new("git")
-            .current_dir(self.repo.workdir().unwrap_or(std::path::Path::new(".")))
-            .args(["push", "origin", "--", branch])
-            .output()
-            .map_err(|e| e.to_string())?;
-        if output.status.success() {
-            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-            Ok(if !stdout.is_empty() { stdout } else if !stderr.is_empty() { stderr } else { "Pushed cleanly to origin".into() })
+        let refspec = if branch == "HEAD" {
+            "HEAD".to_string()
         } else {
-            Err(String::from_utf8_lossy(&output.stderr).to_string())
+            format!("HEAD:refs/heads/{}", branch)
+        };
+        let mut args = vec!["push".to_string(), "--progress".to_string()];
+        if force_with_lease {
+            args.push("--force-with-lease".to_string());
         }
+        args.extend(["origin".to_string(), refspec]);
+        self.run_git_with_progress(&args, &mut progress, "Pushed cleanly to origin")
     }
 
     pub fn pull_rebase(&self, branch_name: &str) -> Result<String, String> {
+        self.pull_rebase_with_progress(branch_name, |_| {})
+    }
+
+    pub fn pull_rebase_with_progress(
+        &self,
+        branch_name: &str,
+        mut progress: impl FnMut(String),
+    ) -> Result<String, String> {
         let branch = if branch_name.is_empty() || branch_name == "detached HEAD" {
             "main"
         } else {
             branch_name
         };
-        let output = std::process::Command::new("git")
-            .current_dir(self.repo.workdir().unwrap_or(std::path::Path::new(".")))
-            .args(["pull", "--rebase", "origin", "--", branch])
-            .output()
-            .map_err(|e| e.to_string())?;
-        if output.status.success() {
-            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-            Ok(if !stdout.is_empty() { stdout } else if !stderr.is_empty() { stderr } else { "Pulled and rebased cleanly from origin".into() })
-        } else {
-            Err(String::from_utf8_lossy(&output.stderr).to_string())
-        }
+        let refspec = format!("refs/heads/{}", branch);
+        let args = vec![
+            "pull".into(),
+            "--progress".into(),
+            "--rebase".into(),
+            "origin".into(),
+            refspec,
+        ];
+        self.run_git_with_progress(
+            &args,
+            &mut progress,
+            "Pulled and rebased cleanly from origin",
+        )
     }
 
     pub fn fetch_prune(&self) -> Result<String, String> {
-        let output = std::process::Command::new("git")
+        self.fetch_prune_with_progress(|_| {})
+    }
+
+    pub fn fetch_prune_with_progress(
+        &self,
+        mut progress: impl FnMut(String),
+    ) -> Result<String, String> {
+        self.run_git_with_progress(
+            &["fetch".into(), "--progress".into(), "--prune".into()],
+            &mut progress,
+            "Fetched and pruned remote tracking refs",
+        )
+    }
+
+    fn run_git_with_progress(
+        &self,
+        args: &[String],
+        progress: &mut dyn FnMut(String),
+        fallback: &str,
+    ) -> Result<String, String> {
+        use std::io::Read;
+        let mut child = std::process::Command::new("git")
             .current_dir(self.repo.workdir().unwrap_or(std::path::Path::new(".")))
-            .args(["fetch", "--prune"])
-            .output()
+            .args(args)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
             .map_err(|e| e.to_string())?;
-        if output.status.success() {
-            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-            Ok(if !stdout.is_empty() { stdout } else if !stderr.is_empty() { stderr } else { "Fetched and pruned remote tracking refs".into() })
+        let mut stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| "Could not read Git output".to_string())?;
+        let stdout_reader = std::thread::spawn(move || {
+            let mut bytes = Vec::new();
+            let _ = stdout.read_to_end(&mut bytes);
+            bytes
+        });
+        let mut stderr = child
+            .stderr
+            .take()
+            .ok_or_else(|| "Could not read Git progress".to_string())?;
+        let mut stderr_bytes = Vec::new();
+        let mut chunk = [0u8; 2048];
+        let mut pending = Vec::new();
+        loop {
+            let count = stderr.read(&mut chunk).map_err(|e| e.to_string())?;
+            if count == 0 {
+                break;
+            }
+            stderr_bytes.extend_from_slice(&chunk[..count]);
+            for byte in &chunk[..count] {
+                if *byte == b'\r' || *byte == b'\n' {
+                    if !pending.is_empty() {
+                        let line = String::from_utf8_lossy(&pending)
+                            .chars()
+                            .filter(|c| !c.is_control() || *c == '\t')
+                            .collect::<String>();
+                        if !line.trim().is_empty() {
+                            progress(line);
+                        }
+                        pending.clear();
+                    }
+                } else {
+                    pending.push(*byte);
+                }
+            }
+        }
+        if !pending.is_empty() {
+            let line = String::from_utf8_lossy(&pending)
+                .chars()
+                .filter(|c| !c.is_control() || *c == '\t')
+                .collect::<String>();
+            if !line.trim().is_empty() {
+                progress(line);
+            }
+        }
+        let status = child.wait().map_err(|e| e.to_string())?;
+        let stdout = stdout_reader.join().unwrap_or_default();
+        if status.success() {
+            Ok(command_report(&stdout, &stderr_bytes, fallback))
         } else {
-            Err(String::from_utf8_lossy(&output.stderr).to_string())
+            Err(command_report(
+                &stdout,
+                &stderr_bytes,
+                "Git remote operation failed",
+            ))
         }
     }
 
@@ -649,9 +1130,7 @@ impl GitSanctuary {
             .checkout_tree(&obj, Some(&mut checkout))
             .map_err(|e| e.to_string())?;
 
-        self.repo
-            .set_head(&ref_name)
-            .map_err(|e| e.to_string())?;
+        self.repo.set_head(&ref_name).map_err(|e| e.to_string())?;
 
         Ok(())
     }
@@ -672,15 +1151,19 @@ impl GitSanctuary {
             None => return files,
         };
 
-        fn scan_dir(dir: &std::path::Path, base: &std::path::Path, out: &mut Vec<String>, depth: usize) {
-            if depth > 4 || out.len() > 300 {
-                return;
-            }
+        fn scan_dir(dir: &std::path::Path, base: &std::path::Path, out: &mut Vec<String>) {
             if let Ok(entries) = std::fs::read_dir(dir) {
                 for entry in entries.flatten() {
+                    if entry
+                        .file_type()
+                        .map(|kind| kind.is_symlink())
+                        .unwrap_or(true)
+                    {
+                        continue;
+                    }
                     let path = entry.path();
                     let name = entry.file_name().to_string_lossy().to_string();
-                    if name.starts_with('.') || name == "target" || name == "node_modules" {
+                    if name == ".git" || name == "target" || name == "node_modules" {
                         continue;
                     }
                     if path.is_file() {
@@ -688,20 +1171,23 @@ impl GitSanctuary {
                             out.push(rel.to_string_lossy().replace('\\', "/"));
                         }
                     } else if path.is_dir() {
-                        scan_dir(&path, base, out, depth + 1);
+                        scan_dir(&path, base, out);
                     }
                 }
             }
         }
 
-        scan_dir(workdir, workdir, &mut files, 0);
+        scan_dir(workdir, workdir, &mut files);
         files.sort();
         files
     }
 
     pub fn create_tag(&self, tag_name: &str) -> Result<(), String> {
         let head = self.repo.head().map_err(|e| e.to_string())?;
-        let obj = head.peel_to_commit().map_err(|e| e.to_string())?.into_object();
+        let obj = head
+            .peel_to_commit()
+            .map_err(|e| e.to_string())?
+            .into_object();
         let sig = self.sanctuary_signature()?;
 
         self.repo
@@ -822,8 +1308,16 @@ impl GitSanctuary {
 
             let old_id = entry.id_old().to_string();
             let new_id = entry.id_new().to_string();
-            let old_short = if old_id.len() >= 7 { old_id[..7].to_string() } else { old_id.clone() };
-            let new_short = if new_id.len() >= 7 { new_id[..7].to_string() } else { new_id.clone() };
+            let old_short = if old_id.len() >= 7 {
+                old_id[..7].to_string()
+            } else {
+                old_id.clone()
+            };
+            let new_short = if new_id.len() >= 7 {
+                new_id[..7].to_string()
+            } else {
+                new_id.clone()
+            };
 
             entries.push(ReflogEntryInfo {
                 index: idx,
@@ -842,11 +1336,17 @@ impl GitSanctuary {
     /// Reset HEAD to a given commit or reflog target
     pub fn reset_head(&self, target_sha: &str, reset_type: ResetType) -> Result<(), String> {
         let obj = if let Ok(oid) = Oid::from_str(target_sha) {
-            self.repo.find_object(oid, None).map_err(|e| e.to_string())?
+            self.repo
+                .find_object(oid, None)
+                .map_err(|e| e.to_string())?
         } else {
-            self.repo.revparse_single(target_sha).map_err(|e| e.to_string())?
+            self.repo
+                .revparse_single(target_sha)
+                .map_err(|e| e.to_string())?
         };
-        self.repo.reset(&obj, reset_type, None).map_err(|e| e.to_string())?;
+        self.repo
+            .reset(&obj, reset_type, None)
+            .map_err(|e| e.to_string())?;
         Ok(())
     }
 
@@ -874,7 +1374,11 @@ impl GitSanctuary {
     }
 
     /// 4. The K'uk'ulkan Confluence: Branch Merging & Cherry-Picking
-    pub fn merge_branch(&self, target_branch: &str, strategy: MergeStrategy) -> Result<String, String> {
+    pub fn merge_branch(
+        &self,
+        target_branch: &str,
+        strategy: MergeStrategy,
+    ) -> Result<String, String> {
         let ref_name = format!("refs/heads/{}", target_branch);
         let target_commit = self
             .repo
@@ -886,8 +1390,14 @@ impl GitSanctuary {
         let head = self.repo.head().map_err(|e| e.to_string())?;
         let head_commit = head.peel_to_commit().map_err(|e| e.to_string())?;
 
-        let _head_annotated = self.repo.find_annotated_commit(head_commit.id()).map_err(|e| e.to_string())?;
-        let target_annotated = self.repo.find_annotated_commit(target_commit.id()).map_err(|e| e.to_string())?;
+        let _head_annotated = self
+            .repo
+            .find_annotated_commit(head_commit.id())
+            .map_err(|e| e.to_string())?;
+        let target_annotated = self
+            .repo
+            .find_annotated_commit(target_commit.id())
+            .map_err(|e| e.to_string())?;
 
         let (analysis, _preference) = self
             .repo
@@ -901,10 +1411,20 @@ impl GitSanctuary {
         if analysis.is_fast_forward() && strategy == MergeStrategy::FastForward {
             let mut checkout = git2::build::CheckoutBuilder::new();
             checkout.safe();
-            self.repo.checkout_tree(target_commit.as_object(), Some(&mut checkout)).map_err(|e| e.to_string())?;
+            self.repo
+                .checkout_tree(target_commit.as_object(), Some(&mut checkout))
+                .map_err(|e| e.to_string())?;
             let mut head_ref = self.repo.head().map_err(|e| e.to_string())?;
-            head_ref.set_target(target_commit.id(), &format!("Fast-Forward to {}", target_branch)).map_err(|e| e.to_string())?;
-            return Ok(format!("Fast-Forwarded sovereign branch to [{}]", &target_commit.id().to_string()[..7]));
+            head_ref
+                .set_target(
+                    target_commit.id(),
+                    &format!("Fast-Forward to {}", target_branch),
+                )
+                .map_err(|e| e.to_string())?;
+            return Ok(format!(
+                "Fast-Forwarded sovereign branch to [{}]",
+                &target_commit.id().to_string()[..7]
+            ));
         }
 
         // Three-way merge or squash
@@ -935,15 +1455,23 @@ impl GitSanctuary {
         // Sync working tree with the merged commit tree
         let mut checkout = git2::build::CheckoutBuilder::new();
         checkout.force();
-        let _ = self.repo.checkout_tree(tree.as_object(), Some(&mut checkout));
+        let _ = self
+            .repo
+            .checkout_tree(tree.as_object(), Some(&mut checkout));
 
-        Ok(format!("Consecrated merge commit [{}]", &commit_oid.to_string()[..7]))
+        Ok(format!(
+            "Consecrated merge commit [{}]",
+            &commit_oid.to_string()[..7]
+        ))
     }
 
     /// Cherry-pick a specific commit into active HEAD
     pub fn cherry_pick_commit(&self, commit_sha: &str) -> Result<String, String> {
         let commit_oid = Oid::from_str(commit_sha).map_err(|e| e.to_string())?;
-        let target_commit = self.repo.find_commit(commit_oid).map_err(|e| e.to_string())?;
+        let target_commit = self
+            .repo
+            .find_commit(commit_oid)
+            .map_err(|e| e.to_string())?;
 
         let head = self.repo.head().map_err(|e| e.to_string())?;
         let head_commit = head.peel_to_commit().map_err(|e| e.to_string())?;
@@ -961,7 +1489,11 @@ impl GitSanctuary {
         let tree = self.repo.find_tree(tree_oid).map_err(|e| e.to_string())?;
         let sig = self.sanctuary_signature()?;
 
-        let msg = format!("cherry-pick: {}\n\n(cherry picked from commit {})", target_commit.summary().unwrap_or(""), commit_sha);
+        let msg = format!(
+            "cherry-pick: {}\n\n(cherry picked from commit {})",
+            target_commit.summary().unwrap_or(""),
+            commit_sha
+        );
         let new_oid = self
             .repo
             .commit(Some("HEAD"), &sig, &sig, &msg, &tree, &[&head_commit])
@@ -970,9 +1502,14 @@ impl GitSanctuary {
         // Sync working tree with the plucked commit tree
         let mut checkout = git2::build::CheckoutBuilder::new();
         checkout.force();
-        let _ = self.repo.checkout_tree(tree.as_object(), Some(&mut checkout));
+        let _ = self
+            .repo
+            .checkout_tree(tree.as_object(), Some(&mut checkout));
 
-        Ok(format!("Plucked commit into [{}]", &new_oid.to_string()[..7]))
+        Ok(format!(
+            "Plucked commit into [{}]",
+            &new_oid.to_string()[..7]
+        ))
     }
 
     /// 5. The Chac Purifier: Untracked Files and Stash Vault
@@ -1024,7 +1561,11 @@ impl GitSanctuary {
         Ok(())
     }
 
-    pub fn sprout_branch_from_stash(&mut self, stash_index: usize, branch_name: &str) -> Result<String, String> {
+    pub fn sprout_branch_from_stash(
+        &mut self,
+        stash_index: usize,
+        branch_name: &str,
+    ) -> Result<String, String> {
         let mut target_commit_oid: Option<Oid> = None;
         let _ = self.repo.stash_foreach(|idx, _name, oid| {
             if idx == stash_index {
@@ -1035,13 +1576,23 @@ impl GitSanctuary {
             }
         });
 
-        let stash_oid = target_commit_oid.ok_or_else(|| format!("Stash cist @{} not found", stash_index))?;
-        let commit = self.repo.find_commit(stash_oid).map_err(|e| e.to_string())?;
+        let stash_oid =
+            target_commit_oid.ok_or_else(|| format!("Stash cist @{} not found", stash_index))?;
+        let commit = self
+            .repo
+            .find_commit(stash_oid)
+            .map_err(|e| e.to_string())?;
 
-        self.repo.branch(branch_name, &commit, false).map_err(|e| e.to_string())?;
+        self.repo
+            .branch(branch_name, &commit, false)
+            .map_err(|e| e.to_string())?;
         self.switch_branch(branch_name)?;
 
-        Ok(format!("Sprouted branch '{}' from stash commit [{}]", branch_name, &stash_oid.to_string()[..7]))
+        Ok(format!(
+            "Sprouted branch '{}' from stash commit [{}]",
+            branch_name,
+            &stash_oid.to_string()[..7]
+        ))
     }
 
     /// 6. The Overseer Portals: Remote Operations
@@ -1090,9 +1641,15 @@ impl GitSanctuary {
     }
 
     /// Retrieve the historical (old, new) text contents for a specific file within a given commit
-    pub fn get_commit_file_diff(&self, short_or_full_sha: &str, file_path: &str) -> (String, String) {
+    pub fn get_commit_file_diff(
+        &self,
+        short_or_full_sha: &str,
+        file_path: &str,
+    ) -> (String, String) {
         let commit = if short_or_full_sha.len() == 40 {
-            self.repo.find_commit(Oid::from_str(short_or_full_sha).unwrap_or(Oid::zero())).ok()
+            self.repo
+                .find_commit(Oid::from_str(short_or_full_sha).unwrap_or(Oid::zero()))
+                .ok()
         } else {
             let mut found = None;
             if let Ok(mut revwalk) = self.repo.revwalk() {
@@ -1122,7 +1679,11 @@ impl GitSanctuary {
             .ok()
             .and_then(|entry| entry.to_object(&self.repo).ok())
             .and_then(|obj| obj.into_blob().ok())
-            .and_then(|blob| std::str::from_utf8(blob.content()).ok().map(|s| s.to_string()))
+            .and_then(|blob| {
+                std::str::from_utf8(blob.content())
+                    .ok()
+                    .map(|s| s.to_string())
+            })
             .unwrap_or_default();
 
         let old_text = if target_commit.parent_count() > 0 {
@@ -1133,7 +1694,11 @@ impl GitSanctuary {
                 .and_then(|ptree| ptree.get_path(Path::new(file_path)).ok())
                 .and_then(|entry| entry.to_object(&self.repo).ok())
                 .and_then(|obj| obj.into_blob().ok())
-                .and_then(|blob| std::str::from_utf8(blob.content()).ok().map(|s| s.to_string()))
+                .and_then(|blob| {
+                    std::str::from_utf8(blob.content())
+                        .ok()
+                        .map(|s| s.to_string())
+                })
                 .unwrap_or_default()
         } else {
             String::new()
@@ -1150,7 +1715,11 @@ impl GitSanctuary {
             .and_then(|t| t.get_path(Path::new(file_path)).ok())
             .and_then(|entry| entry.to_object(&self.repo).ok())
             .and_then(|obj| obj.into_blob().ok())
-            .and_then(|blob| std::str::from_utf8(blob.content()).ok().map(|s| s.to_string()))
+            .and_then(|blob| {
+                std::str::from_utf8(blob.content())
+                    .ok()
+                    .map(|s| s.to_string())
+            })
             .unwrap_or_default();
 
         let index_text = self
@@ -1159,9 +1728,17 @@ impl GitSanctuary {
             .ok()
             .and_then(|idx| idx.get_path(Path::new(file_path), 0).map(|e| e.id))
             .and_then(|oid| self.repo.find_blob(oid).ok())
-            .and_then(|blob| std::str::from_utf8(blob.content()).ok().map(|s| s.to_string()));
+            .and_then(|blob| {
+                std::str::from_utf8(blob.content())
+                    .ok()
+                    .map(|s| s.to_string())
+            });
 
-        let workdir = self.repo.workdir().map(|w| w.to_path_buf()).unwrap_or_else(|| std::path::PathBuf::from("."));
+        let workdir = self
+            .repo
+            .workdir()
+            .map(|w| w.to_path_buf())
+            .unwrap_or_else(|| std::path::PathBuf::from("."));
         let full_path = workdir.join(file_path);
         let worktree_text = std::fs::read_to_string(&full_path).unwrap_or_default();
 
@@ -1194,7 +1771,9 @@ impl GitSanctuary {
         };
 
         let mut revwalk = self.repo.revwalk().map_err(|e| e.to_string())?;
-        revwalk.set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::TIME).map_err(|e| e.to_string())?;
+        revwalk
+            .set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::TIME)
+            .map_err(|e| e.to_string())?;
         revwalk.push(head_oid).map_err(|e| e.to_string())?;
 
         if let Some(up_oid) = upstream_oid {
@@ -1204,12 +1783,10 @@ impl GitSanctuary {
         let mut candidates = Vec::new();
         let max_count = if upstream_oid.is_some() { 100 } else { 20 };
 
-        for oid_res in revwalk.take(max_count) {
-            if let Ok(oid) = oid_res {
-                if let Ok(commit) = self.repo.find_commit(oid) {
-                    let summary = commit.summary().unwrap_or("Sacred Inscription").to_string();
-                    candidates.push((oid.to_string(), summary));
-                }
+        for oid in revwalk.take(max_count).flatten() {
+            if let Ok(commit) = self.repo.find_commit(oid) {
+                let summary = commit.summary().unwrap_or("Sacred Inscription").to_string();
+                candidates.push((oid.to_string(), summary));
             }
         }
 
@@ -1247,8 +1824,16 @@ impl GitSanctuary {
         if let Ok(index) = self.repo.index() {
             if let Ok(conflicts) = index.conflicts() {
                 for c in conflicts.flatten() {
-                    let matches_our = c.our.as_ref().map(|e| String::from_utf8_lossy(&e.path) == file_path).unwrap_or(false);
-                    let matches_their = c.their.as_ref().map(|e| String::from_utf8_lossy(&e.path) == file_path).unwrap_or(false);
+                    let matches_our = c
+                        .our
+                        .as_ref()
+                        .map(|e| String::from_utf8_lossy(&e.path) == file_path)
+                        .unwrap_or(false);
+                    let matches_their = c
+                        .their
+                        .as_ref()
+                        .map(|e| String::from_utf8_lossy(&e.path) == file_path)
+                        .unwrap_or(false);
 
                     if matches_our || matches_their {
                         if let Some(our_entry) = c.our {
@@ -1340,7 +1925,9 @@ impl GitSanctuary {
     pub fn abort_rebase(&self) -> Result<(), String> {
         // Try resetting to ORIG_HEAD
         if let Ok(orig_obj) = self.repo.revparse_single("ORIG_HEAD") {
-            self.repo.reset(&orig_obj, ResetType::Hard, None).map_err(|e| e.to_string())?;
+            self.repo
+                .reset(&orig_obj, ResetType::Hard, None)
+                .map_err(|e| e.to_string())?;
             if let Ok(mut r) = self.repo.find_reference("ORIG_HEAD") {
                 let _ = r.delete();
             }
@@ -1355,7 +1942,9 @@ impl GitSanctuary {
 
         let head = self.repo.head().map_err(|e| e.to_string())?;
         let commit = head.peel_to_commit().map_err(|e| e.to_string())?;
-        self.repo.reset(commit.as_object(), ResetType::Hard, None).map_err(|e| e.to_string())
+        self.repo
+            .reset(commit.as_object(), ResetType::Hard, None)
+            .map_err(|e| e.to_string())
     }
 
     /// Execute interactive rebase plan across given steps using cherry-pick sequencer.
@@ -1382,28 +1971,47 @@ impl GitSanctuary {
 
         // Validate: cannot drop all commits
         if steps.iter().all(|s| s.action == RebaseAction::Drop) {
-            return Err(RebaseError::Fatal("Cannot drop all commits in rebase range.".into()));
+            return Err(RebaseError::Fatal(
+                "Cannot drop all commits in rebase range.".into(),
+            ));
         }
 
         // Save ORIG_HEAD
-        let head = self.repo.head().map_err(|e| RebaseError::Fatal(e.to_string()))?;
-        let head_commit = head.peel_to_commit().map_err(|e| RebaseError::Fatal(e.to_string()))?;
-        let _ = self.repo.reference("ORIG_HEAD", head_commit.id(), true, "itzamna: rebase begin");
+        let head = self
+            .repo
+            .head()
+            .map_err(|e| RebaseError::Fatal(e.to_string()))?;
+        let head_commit = head
+            .peel_to_commit()
+            .map_err(|e| RebaseError::Fatal(e.to_string()))?;
+        let _ = self
+            .repo
+            .reference("ORIG_HEAD", head_commit.id(), true, "itzamna: rebase begin");
 
         // Base commit is the parent of the first step
-        let first_oid = Oid::from_str(&steps[0].full_sha).map_err(|e| RebaseError::Fatal(e.to_string()))?;
-        let first_commit = self.repo.find_commit(first_oid).map_err(|e| RebaseError::Fatal(e.to_string()))?;
+        let first_oid =
+            Oid::from_str(&steps[0].full_sha).map_err(|e| RebaseError::Fatal(e.to_string()))?;
+        let first_commit = self
+            .repo
+            .find_commit(first_oid)
+            .map_err(|e| RebaseError::Fatal(e.to_string()))?;
 
         if first_commit.parent_count() == 0 {
-            return Err(RebaseError::Fatal("Rebasing root commit is not currently supported.".into()));
+            return Err(RebaseError::Fatal(
+                "Rebasing root commit is not currently supported.".into(),
+            ));
         }
 
-        let base_commit = first_commit.parent(0).map_err(|e| RebaseError::Fatal(e.to_string()))?;
+        let base_commit = first_commit
+            .parent(0)
+            .map_err(|e| RebaseError::Fatal(e.to_string()))?;
 
         // Reset HEAD to base
         self.repo
             .reset(base_commit.as_object(), ResetType::Hard, None)
-            .map_err(|e| RebaseError::Fatal(format!("Failed to reset HEAD to base commit: {}", e)))?;
+            .map_err(|e| {
+                RebaseError::Fatal(format!("Failed to reset HEAD to base commit: {}", e))
+            })?;
 
         // Sequentially apply each step
         for (idx, step) in steps.iter().enumerate() {
@@ -1411,21 +2019,39 @@ impl GitSanctuary {
         }
 
         let final_head = self.repo.head().ok().and_then(|h| h.peel_to_commit().ok());
-        let final_sha = final_head.map(|c| c.id().to_string()[..7].to_string()).unwrap_or_default();
-        Ok(format!("K'uk'ulkan Rebase ritual concluded! Sovereign HEAD is [{}]", final_sha))
+        let final_sha = final_head
+            .map(|c| c.id().to_string()[..7].to_string())
+            .unwrap_or_default();
+        Ok(format!(
+            "K'uk'ulkan Rebase ritual concluded! Sovereign HEAD is [{}]",
+            final_sha
+        ))
     }
 
     /// Internal helper: Apply a single rebase step
-    fn apply_single_rebase_step(&self, idx: usize, step: &RebasePlanStep) -> Result<(), RebaseError> {
+    fn apply_single_rebase_step(
+        &self,
+        idx: usize,
+        step: &RebasePlanStep,
+    ) -> Result<(), RebaseError> {
         if step.action == RebaseAction::Drop {
             return Ok(());
         }
 
-        let target_oid = Oid::from_str(&step.full_sha).map_err(|e| RebaseError::Fatal(e.to_string()))?;
-        let target_commit = self.repo.find_commit(target_oid).map_err(|e| RebaseError::Fatal(e.to_string()))?;
+        let target_oid =
+            Oid::from_str(&step.full_sha).map_err(|e| RebaseError::Fatal(e.to_string()))?;
+        let target_commit = self
+            .repo
+            .find_commit(target_oid)
+            .map_err(|e| RebaseError::Fatal(e.to_string()))?;
 
-        let head = self.repo.head().map_err(|e| RebaseError::Fatal(e.to_string()))?;
-        let head_commit = head.peel_to_commit().map_err(|e| RebaseError::Fatal(e.to_string()))?;
+        let head = self
+            .repo
+            .head()
+            .map_err(|e| RebaseError::Fatal(e.to_string()))?;
+        let head_commit = head
+            .peel_to_commit()
+            .map_err(|e| RebaseError::Fatal(e.to_string()))?;
 
         let mut index = self
             .repo
@@ -1435,7 +2061,9 @@ impl GitSanctuary {
         if index.has_conflicts() {
             let mut checkout_opts = git2::build::CheckoutBuilder::new();
             checkout_opts.conflict_style_merge(true);
-            let _ = self.repo.checkout_index(Some(&mut index), Some(&mut checkout_opts));
+            let _ = self
+                .repo
+                .checkout_index(Some(&mut index), Some(&mut checkout_opts));
             let _ = index.write();
 
             let conflicted_files = self.get_conflicted_files();
@@ -1450,8 +2078,13 @@ impl GitSanctuary {
             });
         }
 
-        let tree_oid = index.write_tree_to(&self.repo).map_err(|e| RebaseError::Fatal(e.to_string()))?;
-        let tree = self.repo.find_tree(tree_oid).map_err(|e| RebaseError::Fatal(e.to_string()))?;
+        let tree_oid = index
+            .write_tree_to(&self.repo)
+            .map_err(|e| RebaseError::Fatal(e.to_string()))?;
+        let tree = self
+            .repo
+            .find_tree(tree_oid)
+            .map_err(|e| RebaseError::Fatal(e.to_string()))?;
         let sig = self.sanctuary_signature().map_err(RebaseError::Fatal)?;
 
         match step.action {
@@ -1475,7 +2108,14 @@ impl GitSanctuary {
                 let parent_msg = head_commit.message().unwrap_or("").trim();
                 let combined_msg = format!("{}\n\n- {}", parent_msg, step.current_message.trim());
                 head_commit
-                    .amend(Some("HEAD"), Some(&sig), Some(&sig), None, Some(&combined_msg), Some(&tree))
+                    .amend(
+                        Some("HEAD"),
+                        Some(&sig),
+                        Some(&sig),
+                        None,
+                        Some(&combined_msg),
+                        Some(&tree),
+                    )
                     .map_err(|e| RebaseError::Fatal(e.to_string()))?;
             }
             RebaseAction::Drop => {}
@@ -1505,18 +2145,38 @@ impl GitSanctuary {
 
         // Commit the resolved conflict state for the current step
         if let Some(step) = steps.get(current_step_index) {
-            let mut index = self.repo.index().map_err(|e| RebaseError::Fatal(e.to_string()))?;
-            let tree_oid = index.write_tree_to(&self.repo).map_err(|e| RebaseError::Fatal(e.to_string()))?;
-            let tree = self.repo.find_tree(tree_oid).map_err(|e| RebaseError::Fatal(e.to_string()))?;
+            let mut index = self
+                .repo
+                .index()
+                .map_err(|e| RebaseError::Fatal(e.to_string()))?;
+            let tree_oid = index
+                .write_tree_to(&self.repo)
+                .map_err(|e| RebaseError::Fatal(e.to_string()))?;
+            let tree = self
+                .repo
+                .find_tree(tree_oid)
+                .map_err(|e| RebaseError::Fatal(e.to_string()))?;
             let sig = self.sanctuary_signature().map_err(RebaseError::Fatal)?;
-            let head = self.repo.head().map_err(|e| RebaseError::Fatal(e.to_string()))?;
-            let head_commit = head.peel_to_commit().map_err(|e| RebaseError::Fatal(e.to_string()))?;
+            let head = self
+                .repo
+                .head()
+                .map_err(|e| RebaseError::Fatal(e.to_string()))?;
+            let head_commit = head
+                .peel_to_commit()
+                .map_err(|e| RebaseError::Fatal(e.to_string()))?;
 
             if step.action == RebaseAction::Squash {
                 let parent_msg = head_commit.message().unwrap_or("").trim();
                 let combined_msg = format!("{}\n\n- {}", parent_msg, step.current_message.trim());
                 head_commit
-                    .amend(Some("HEAD"), Some(&sig), Some(&sig), None, Some(&combined_msg), Some(&tree))
+                    .amend(
+                        Some("HEAD"),
+                        Some(&sig),
+                        Some(&sig),
+                        None,
+                        Some(&combined_msg),
+                        Some(&tree),
+                    )
                     .map_err(|e| RebaseError::Fatal(e.to_string()))?;
             } else {
                 let msg = if step.current_message.trim().is_empty() {
@@ -1535,13 +2195,18 @@ impl GitSanctuary {
         }
 
         // Continue remaining steps
-        for idx in (current_step_index + 1)..steps.len() {
-            self.apply_single_rebase_step(idx, &steps[idx])?;
+        for (idx, step) in steps.iter().enumerate().skip(current_step_index + 1) {
+            self.apply_single_rebase_step(idx, step)?;
         }
 
         let final_head = self.repo.head().ok().and_then(|h| h.peel_to_commit().ok());
-        let final_sha = final_head.map(|c| c.id().to_string()[..7].to_string()).unwrap_or_default();
-        Ok(format!("K'uk'ulkan Rebase ritual concluded! Sovereign HEAD is [{}]", final_sha))
+        let final_sha = final_head
+            .map(|c| c.id().to_string()[..7].to_string())
+            .unwrap_or_default();
+        Ok(format!(
+            "K'uk'ulkan Rebase ritual concluded! Sovereign HEAD is [{}]",
+            final_sha
+        ))
     }
 }
 
@@ -1549,14 +2214,71 @@ impl GitSanctuary {
 mod tests {
     use super::*;
 
+    fn graph_node(sha_char: char, parents: Vec<String>) -> GitCommitNode {
+        let sha = std::iter::repeat_n(sha_char, 40).collect::<String>();
+        GitCommitNode {
+            short_sha: sha[..7].to_string(),
+            sha,
+            summary: String::new(),
+            author_name: String::new(),
+            author_email: String::new(),
+            time_secs: 0,
+            relative_time: String::new(),
+            parents,
+            branch_lane: 0,
+            is_head: false,
+            tags: Vec::new(),
+            branches: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn lane_packing_routes_merge_parents_and_joins_shared_ancestors() {
+        let sha = |c: char| std::iter::repeat_n(c, 40).collect::<String>();
+        let mut nodes = vec![
+            graph_node('a', vec![sha('b'), sha('c')]),
+            graph_node('b', vec![sha('d')]),
+            graph_node('c', vec![sha('d')]),
+            graph_node('d', Vec::new()),
+        ];
+        GitSanctuary::assign_topological_lanes(&mut nodes);
+        assert_eq!(nodes[0].branch_lane, 0);
+        assert_eq!(nodes[1].branch_lane, 0);
+        assert_eq!(nodes[2].branch_lane, 1);
+        assert_eq!(nodes[3].branch_lane, 0);
+    }
+
+    #[test]
+    fn local_telemetry_has_no_synthetic_contributor_data() {
+        let sanctuary = GitSanctuary::open(".").expect("workspace repository should open");
+        let report = sanctuary
+            .calculate_local_telemetry()
+            .expect("local Git analysis should work");
+        assert!(report
+            .top_contributors
+            .iter()
+            .all(|author| author.name != "Ahau Architect"));
+        assert!(report.dora.change_failure_rate.is_finite());
+        assert!(
+            report.churn.net_growth
+                == report.churn.lines_added as i64 - report.churn.lines_deleted as i64
+        );
+    }
+
     #[test]
     fn test_sanctuary_signature_fallback() {
         if let Ok(sanctuary) = GitSanctuary::open(".") {
             let sig = sanctuary.sanctuary_signature();
             assert!(sig.is_ok(), "Signature generation should always succeed");
             let sig = sig.unwrap();
-            assert!(!sig.name().unwrap_or("").is_empty(), "Signature name must not be empty");
-            assert!(!sig.email().unwrap_or("").is_empty(), "Signature email must not be empty");
+            assert!(
+                !sig.name().unwrap_or("").is_empty(),
+                "Signature name must not be empty"
+            );
+            assert!(
+                !sig.email().unwrap_or("").is_empty(),
+                "Signature email must not be empty"
+            );
         }
     }
 
@@ -1565,9 +2287,19 @@ mod tests {
         if let Ok(sanctuary) = GitSanctuary::open(".") {
             if let Ok(entries) = sanctuary.get_reflog() {
                 for entry in entries {
-                    assert_eq!(entry.full_sha.len(), 40, "Reflog entry full_sha must be exactly 40 characters");
-                    assert!(entry.old_sha.len() <= 7, "Old SHA should be short representation");
-                    assert!(entry.new_sha.len() <= 7, "New SHA should be short representation");
+                    assert_eq!(
+                        entry.full_sha.len(),
+                        40,
+                        "Reflog entry full_sha must be exactly 40 characters"
+                    );
+                    assert!(
+                        entry.old_sha.len() <= 7,
+                        "Old SHA should be short representation"
+                    );
+                    assert!(
+                        entry.new_sha.len() <= 7,
+                        "New SHA should be short representation"
+                    );
                 }
             }
         }
@@ -1587,11 +2319,17 @@ mod tests {
     fn test_load_rebase_candidates() {
         if let Ok(sanctuary) = GitSanctuary::open(".") {
             let candidates = sanctuary.load_rebase_candidates();
-            assert!(candidates.is_ok(), "Loading rebase candidates should succeed");
+            assert!(
+                candidates.is_ok(),
+                "Loading rebase candidates should succeed"
+            );
             let candidates = candidates.unwrap();
             for (sha, summary) in &candidates {
                 assert_eq!(sha.len(), 40, "Candidate SHA should be 40 chars full hash");
-                assert!(!summary.is_empty(), "Candidate commit summary should not be empty");
+                assert!(
+                    !summary.is_empty(),
+                    "Candidate commit summary should not be empty"
+                );
             }
         }
     }

@@ -11,12 +11,12 @@ use crate::ui::tooltip::mayan_tooltip;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MenuCategory {
-    PopolVuh,    // File
-    ChilamBalam, // Edit
-    CosmicVision,// View
-    Yaxche,      // Branches
-    SacredAltar, // Stash / Stage
-    IxchelOracle,// Analytics
+    PopolVuh,     // File
+    ChilamBalam,  // Edit
+    CosmicVision, // View
+    Yaxche,       // Branches
+    SacredAltar,  // Stash / Stage
+    IxchelOracle, // Analytics
 }
 
 #[derive(Debug, Clone)]
@@ -33,6 +33,7 @@ pub enum TopMenuMessage {
     Pull,
     Push,
     OpenCredentials,
+    CheckForUpdates,
 }
 
 pub struct TopMenuBar {
@@ -56,12 +57,8 @@ impl TopMenuBar {
 
     pub fn view<'a, Message: 'a + From<TopMenuMessage> + Clone>(&'a self) -> Element<'a, Message> {
         let logo = row![
-            text("🔱 ITZAMNÁ")
-                .size(15)
-                .color(MayaColors::SOLAR_GOLD),
-            text(" · GIT STUDIO")
-                .size(11)
-                .color(MayaColors::JADE_GLOW),
+            text("🔱 ITZAMNÁ").size(15).color(MayaColors::SOLAR_GOLD),
+            text(" · GIT STUDIO").size(11).color(MayaColors::JADE_GLOW),
         ]
         .align_y(Alignment::Center);
 
@@ -84,13 +81,35 @@ impl TopMenuBar {
         };
 
         let quick_actions = row![
+            mayan_tooltip(
+                button(text("✦ Updates").size(11).color(MayaColors::SOLAR_GOLD))
+                    .padding(Padding::from([4, 8]))
+                    .style(|_theme, status| button::Style {
+                        background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
+                        border: Border {
+                            color: if status == button::Status::Hovered {
+                                MayaColors::SOLAR_GOLD
+                            } else {
+                                MayaColors::OBSIDIAN_BORDER
+                            },
+                            width: 1.0,
+                            radius: 4.0.into(),
+                        },
+                        ..Default::default()
+                    })
+                    .on_press(TopMenuMessage::CheckForUpdates.into()),
+                "Check for the latest Itzamna release",
+                iced::widget::tooltip::Position::Bottom,
+            ),
             // 1. Open Sanctuary (Project Folder)
             mayan_tooltip(
                 button(
                     row![
                         text("📂").size(11),
                         Space::new().width(4),
-                        text("Open Sanctuary").size(11).color(MayaColors::SOLAR_GOLD),
+                        text("Open Sanctuary")
+                            .size(11)
+                            .color(MayaColors::SOLAR_GOLD),
                         Space::new().width(4),
                         text("Ctrl+O").size(9).color(MayaColors::GLYPH_DIM),
                     ]
@@ -104,7 +123,11 @@ impl TopMenuBar {
                     };
                     button::Style {
                         background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
-                        border: Border { color: border_color, width: 1.0, radius: 4.0.into() },
+                        border: Border {
+                            color: border_color,
+                            width: 1.0,
+                            radius: 4.0.into(),
+                        },
                         ..Default::default()
                     }
                 })
@@ -112,7 +135,6 @@ impl TopMenuBar {
                 "Open a Git repository from your local filesystem (Ctrl+O)",
                 iced::widget::tooltip::Position::Bottom,
             ),
-
             // 2. Git Pull
             mayan_tooltip(
                 button(
@@ -131,7 +153,11 @@ impl TopMenuBar {
                     };
                     button::Style {
                         background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
-                        border: Border { color: border_color, width: 1.0, radius: 4.0.into() },
+                        border: Border {
+                            color: border_color,
+                            width: 1.0,
+                            radius: 4.0.into(),
+                        },
                         ..Default::default()
                     }
                 })
@@ -139,7 +165,6 @@ impl TopMenuBar {
                 "Pull and rebase commits from remote tracking branch (git pull --rebase)",
                 iced::widget::tooltip::Position::Bottom,
             ),
-
             // 3. Git Push
             mayan_tooltip(
                 button(
@@ -158,7 +183,11 @@ impl TopMenuBar {
                     };
                     button::Style {
                         background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
-                        border: Border { color: border_color, width: 1.0, radius: 4.0.into() },
+                        border: Border {
+                            color: border_color,
+                            width: 1.0,
+                            radius: 4.0.into(),
+                        },
                         ..Default::default()
                     }
                 })
@@ -166,7 +195,6 @@ impl TopMenuBar {
                 "Push sovereign commits to remote horizon (git push origin)",
                 iced::widget::tooltip::Position::Bottom,
             ),
-
             // 4. Git Fetch
             mayan_tooltip(
                 button(
@@ -185,7 +213,11 @@ impl TopMenuBar {
                     };
                     button::Style {
                         background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
-                        border: Border { color: border_color, width: 1.0, radius: 4.0.into() },
+                        border: Border {
+                            color: border_color,
+                            width: 1.0,
+                            radius: 4.0.into(),
+                        },
                         ..Default::default()
                     }
                 })
@@ -193,7 +225,6 @@ impl TopMenuBar {
                 "Fetch remote branch updates and prune stale refs (git fetch --prune)",
                 iced::widget::tooltip::Position::Bottom,
             ),
-
             // 5. Git Credentials
             mayan_tooltip(
                 button(
@@ -212,7 +243,11 @@ impl TopMenuBar {
                     };
                     button::Style {
                         background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
-                        border: Border { color: border_color, width: 1.0, radius: 4.0.into() },
+                        border: Border {
+                            color: border_color,
+                            width: 1.0,
+                            radius: 4.0.into(),
+                        },
                         ..Default::default()
                     }
                 })
@@ -220,7 +255,6 @@ impl TopMenuBar {
                 "Configure local repository Git credentials (user.name, user.email, remote URL)",
                 iced::widget::tooltip::Position::Bottom,
             ),
-
             // 6. Command Palette
             mayan_tooltip(
                 button(
@@ -241,7 +275,11 @@ impl TopMenuBar {
                     };
                     button::Style {
                         background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
-                        border: Border { color: border_color, width: 1.0, radius: 4.0.into() },
+                        border: Border {
+                            color: border_color,
+                            width: 1.0,
+                            radius: 4.0.into(),
+                        },
                         ..Default::default()
                     }
                 })
@@ -249,7 +287,6 @@ impl TopMenuBar {
                 "Open Command Palette to search and execute all sacred rituals (Ctrl+P)",
                 iced::widget::tooltip::Position::Bottom,
             ),
-
             // 7. Background Mode Cycle
             mayan_tooltip(
                 button(
@@ -266,7 +303,11 @@ impl TopMenuBar {
                     button::Style {
                         background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
                         text_color: MayaColors::STARLIGHT_WHITE,
-                        border: Border { color: border_color, width: 1.0, radius: 4.0.into() },
+                        border: Border {
+                            color: border_color,
+                            width: 1.0,
+                            radius: 4.0.into(),
+                        },
                         ..Default::default()
                     }
                 })
@@ -291,7 +332,13 @@ impl TopMenuBar {
         container(content)
             .width(Length::Fill)
             .style(|_theme| container::Style {
-                background: Some(Color { a: 0.94, ..MayaColors::OBSIDIAN_BASE }.into()), // Solid opaque!
+                background: Some(
+                    Color {
+                        a: 0.94,
+                        ..MayaColors::OBSIDIAN_BASE
+                    }
+                    .into(),
+                ), // Solid opaque!
                 border: Border {
                     color: MayaColors::OBSIDIAN_BORDER,
                     width: 0.0,
@@ -316,32 +363,35 @@ impl TopMenuBar {
         };
 
         let tooltip_desc = match category {
-            MenuCategory::PopolVuh => "File Sanctuary: Refresh repository state from disk (git status)",
-            MenuCategory::ChilamBalam => "Diff Chamber: Open granular Stone Diff workbench (git diff)",
+            MenuCategory::PopolVuh => {
+                "File Sanctuary: Refresh repository state from disk (git status)"
+            }
+            MenuCategory::ChilamBalam => {
+                "Diff Chamber: Open granular Stone Diff workbench (git diff)"
+            }
             MenuCategory::CosmicVision => "Commit Loom: Focus central Yaxche commit DAG tree",
-            MenuCategory::Yaxche => "Branch Crucible: Interactive rebase & conflict resolution (git rebase -i)",
-            MenuCategory::SacredAltar => "Sacred Altar: Expand file staging & commit chamber (git add / commit)",
-            MenuCategory::IxchelOracle => "Ixchel Oracle: Engineering telemetry & DORA metric radar",
+            MenuCategory::Yaxche => {
+                "Branch Crucible: Interactive rebase & conflict resolution (git rebase -i)"
+            }
+            MenuCategory::SacredAltar => {
+                "Sacred Altar: Expand file staging & commit chamber (git add / commit)"
+            }
+            MenuCategory::IxchelOracle => {
+                "Ixchel Oracle: Engineering telemetry & DORA metric radar"
+            }
         };
 
         let btn = button(text(label).size(12).color(txt_color))
             .padding(Padding::from([5, 9]))
             .style(move |_theme, status| {
                 let (bg, border) = if is_active {
-                    (
-                        MayaColors::OBSIDIAN_SURFACE,
-                        MayaColors::SOLAR_GOLD,
-                    )
+                    (MayaColors::OBSIDIAN_SURFACE, MayaColors::SOLAR_GOLD)
                 } else {
                     match status {
-                        button::Status::Hovered => (
-                            MayaColors::OBSIDIAN_SURFACE,
-                            MayaColors::JADE_GLOW,
-                        ),
-                        _ => (
-                            Color::TRANSPARENT,
-                            Color::TRANSPARENT,
-                        ),
+                        button::Status::Hovered => {
+                            (MayaColors::OBSIDIAN_SURFACE, MayaColors::JADE_GLOW)
+                        }
+                        _ => (Color::TRANSPARENT, Color::TRANSPARENT),
                     }
                 };
 

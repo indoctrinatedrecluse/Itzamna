@@ -59,7 +59,9 @@ impl RightAltar {
         }
     }
 
-    pub fn view<'a, Message: 'a + From<RightAltarMessage> + Clone>(&'a self) -> Element<'a, Message> {
+    pub fn view<'a, Message: 'a + From<RightAltarMessage> + Clone>(
+        &'a self,
+    ) -> Element<'a, Message> {
         if self.is_collapsed {
             return container(
                 button(text("◀").size(14).color(MayaColors::SOLAR_GOLD))
@@ -107,13 +109,9 @@ impl RightAltar {
         let commit_chamber = self.render_commit_chamber();
 
         let files_scroll = scrollable(
-            column![
-                unstaged_section,
-                Space::new().height(14),
-                staged_section,
-            ]
-            .padding(Padding::from([4, 10]))
-            .spacing(4)
+            column![unstaged_section, Space::new().height(14), staged_section,]
+                .padding(Padding::from([4, 10]))
+                .spacing(4),
         )
         .height(Length::Fill);
 
@@ -121,7 +119,13 @@ impl RightAltar {
             .width(320)
             .height(Length::Fill)
             .style(|_theme| container::Style {
-                background: Some(Color { a: 0.90, ..MayaColors::OBSIDIAN_BASE }.into()),
+                background: Some(
+                    Color {
+                        a: 0.90,
+                        ..MayaColors::OBSIDIAN_BASE
+                    }
+                    .into(),
+                ),
                 border: Border {
                     color: MayaColors::OBSIDIAN_BORDER,
                     width: 1.0,
@@ -140,9 +144,7 @@ impl RightAltar {
             text("OFRENDAS (UNSTAGED)")
                 .size(10)
                 .color(MayaColors::SOLAR_AMBER),
-            text(count_badge)
-                .size(10)
-                .color(MayaColors::GLYPH_DIM),
+            text(count_badge).size(10).color(MayaColors::GLYPH_DIM),
             Space::new().width(Length::Fill),
             mayan_tooltip(
                 button(text("Stage All +").size(10).color(MayaColors::JADE_GLOW))
@@ -166,7 +168,11 @@ impl RightAltar {
         let mut list = column![header].spacing(3);
 
         if self.unstaged_files.is_empty() {
-            list = list.push(text("No unstaged modifications.").size(10).color(MayaColors::GLYPH_DIM));
+            list = list.push(
+                text("No unstaged modifications.")
+                    .size(10)
+                    .color(MayaColors::GLYPH_DIM),
+            );
         }
 
         for file in &self.unstaged_files {
@@ -182,11 +188,9 @@ impl RightAltar {
                     row![
                         text(file.status).size(10).color(status_color),
                         Space::new().width(6),
-                        text(&file.path)
-                            .size(11)
-                            .color(MayaColors::STARLIGHT_WHITE),
+                        text(&file.path).size(11).color(MayaColors::STARLIGHT_WHITE),
                     ]
-                    .align_y(Alignment::Center)
+                    .align_y(Alignment::Center),
                 )
                 .padding(Padding::from([1, 4]))
                 .style(|_theme, _status| button::Style {
@@ -242,23 +246,25 @@ impl RightAltar {
             text("CONSAGRADOS (STAGED)")
                 .size(10)
                 .color(MayaColors::JADE_GLOW),
-            text(count_badge)
-                .size(10)
-                .color(MayaColors::GLYPH_DIM),
+            text(count_badge).size(10).color(MayaColors::GLYPH_DIM),
             Space::new().width(Length::Fill),
             mayan_tooltip(
-                button(text("Unstage All -").size(10).color(MayaColors::CINNABAR_BRIGHT))
-                    .padding(Padding::from([1, 6]))
-                    .style(|_theme, _status| button::Style {
-                        background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
-                        border: Border {
-                            color: MayaColors::OBSIDIAN_BORDER,
-                            width: 1.0,
-                            radius: 3.0.into(),
-                        },
-                        ..Default::default()
-                    })
-                    .on_press(RightAltarMessage::UnstageAll.into()),
+                button(
+                    text("Unstage All -")
+                        .size(10)
+                        .color(MayaColors::CINNABAR_BRIGHT)
+                )
+                .padding(Padding::from([1, 6]))
+                .style(|_theme, _status| button::Style {
+                    background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
+                    border: Border {
+                        color: MayaColors::OBSIDIAN_BORDER,
+                        width: 1.0,
+                        radius: 3.0.into(),
+                    },
+                    ..Default::default()
+                })
+                .on_press(RightAltarMessage::UnstageAll.into()),
                 "Unstage all staged files from index (git reset HEAD)",
                 iced::widget::tooltip::Position::Top,
             ),
@@ -268,7 +274,11 @@ impl RightAltar {
         let mut list = column![header].spacing(3);
 
         if self.staged_files.is_empty() {
-            list = list.push(text("No files staged for inscription.").size(10).color(MayaColors::GLYPH_DIM));
+            list = list.push(
+                text("No files staged for inscription.")
+                    .size(10)
+                    .color(MayaColors::GLYPH_DIM),
+            );
         }
 
         for file in &self.staged_files {
@@ -278,11 +288,9 @@ impl RightAltar {
                     row![
                         text(file.status).size(10).color(MayaColors::JADE_GLOW),
                         Space::new().width(6),
-                        text(&file.path)
-                            .size(11)
-                            .color(MayaColors::STARLIGHT_WHITE),
+                        text(&file.path).size(11).color(MayaColors::STARLIGHT_WHITE),
                     ]
-                    .align_y(Alignment::Center)
+                    .align_y(Alignment::Center),
                 )
                 .padding(Padding::from([1, 4]))
                 .style(|_theme, _status| button::Style {
@@ -322,9 +330,17 @@ impl RightAltar {
         &'a self,
     ) -> Element<'a, Message> {
         let chamber_title = row![
-            text(if self.is_amending { "🔥 AMENDAR INSCRIPCIÓN" } else { "✒️ CÁMARA DE INSCRIPCIÓN" })
-                .size(10)
-                .color(if self.is_amending { MayaColors::SOLAR_AMBER } else { MayaColors::SOLAR_GOLD }),
+            text(if self.is_amending {
+                "🔥 AMENDAR INSCRIPCIÓN"
+            } else {
+                "✒️ CÁMARA DE INSCRIPCIÓN"
+            })
+            .size(10)
+            .color(if self.is_amending {
+                MayaColors::SOLAR_AMBER
+            } else {
+                MayaColors::SOLAR_GOLD
+            }),
             Space::new().width(Length::Fill),
             text(format!("K'IN {} / 72", self.commit_summary.len()))
                 .size(9)
@@ -332,31 +348,45 @@ impl RightAltar {
         ]
         .align_y(Alignment::Center);
 
-        let amend_toggle = row![
-            mayan_tooltip(
-                button(
-                    row![
-                        text(if self.is_amending { "☑" } else { "☐" }).size(11).color(if self.is_amending { MayaColors::SOLAR_AMBER } else { MayaColors::GLYPH_DIM }),
-                        Space::new().width(4),
-                        text("Amend Previous Commit").size(9).color(if self.is_amending { MayaColors::SOLAR_AMBER } else { MayaColors::PARCHMENT_MUTED }),
-                    ]
-                    .align_y(Alignment::Center)
-                )
-                .padding(Padding::from([1, 4]))
-                .style(|_, _| button::Style {
-                    background: Some(Color::TRANSPARENT.into()),
-                    ..Default::default()
-                })
-                .on_press(RightAltarMessage::ToggleAmend.into()),
-                "Amend the previous commit message and staged tree changes (git commit --amend)",
-                iced::widget::tooltip::Position::Top,
+        let amend_toggle = row![mayan_tooltip(
+            button(
+                row![
+                    text(if self.is_amending { "☑" } else { "☐" })
+                        .size(11)
+                        .color(if self.is_amending {
+                            MayaColors::SOLAR_AMBER
+                        } else {
+                            MayaColors::GLYPH_DIM
+                        }),
+                    Space::new().width(4),
+                    text("Amend Previous Commit")
+                        .size(9)
+                        .color(if self.is_amending {
+                            MayaColors::SOLAR_AMBER
+                        } else {
+                            MayaColors::PARCHMENT_MUTED
+                        }),
+                ]
+                .align_y(Alignment::Center)
             )
-        ]
+            .padding(Padding::from([1, 4]))
+            .style(|_, _| button::Style {
+                background: Some(Color::TRANSPARENT.into()),
+                ..Default::default()
+            })
+            .on_press(RightAltarMessage::ToggleAmend.into()),
+            "Amend the previous commit message and staged tree changes (git commit --amend)",
+            iced::widget::tooltip::Position::Top,
+        )]
         .align_y(Alignment::Center);
 
         let summary_input = text_input(
-            if self.is_amending { "Amend commit title..." } else { "Commit title (e.g. feat: awaken new ritual)..." },
-            &self.commit_summary
+            if self.is_amending {
+                "Amend commit title..."
+            } else {
+                "Commit title (e.g. feat: awaken new ritual)..."
+            },
+            &self.commit_summary,
         )
         .size(11)
         .padding(Padding::from([7, 9]))
@@ -374,22 +404,25 @@ impl RightAltar {
         })
         .on_input(|val| RightAltarMessage::CommitSummaryChanged(val).into());
 
-        let desc_input = text_input("Optional description / glyph notes...", &self.commit_description)
-            .size(10)
-            .padding(Padding::from([6, 9]))
-            .style(|_theme, _status| text_input::Style {
-                background: MayaColors::OBSIDIAN_SURFACE.into(),
-                border: Border {
-                    color: MayaColors::OBSIDIAN_BORDER,
-                    width: 1.0,
-                    radius: 3.0.into(),
-                },
-                icon: MayaColors::PARCHMENT_MUTED,
-                placeholder: MayaColors::GLYPH_DIM,
-                value: MayaColors::STARLIGHT_WHITE,
-                selection: MayaColors::JADE_SHADOW,
-            })
-            .on_input(|val| RightAltarMessage::CommitDescriptionChanged(val).into());
+        let desc_input = text_input(
+            "Optional description / glyph notes...",
+            &self.commit_description,
+        )
+        .size(10)
+        .padding(Padding::from([6, 9]))
+        .style(|_theme, _status| text_input::Style {
+            background: MayaColors::OBSIDIAN_SURFACE.into(),
+            border: Border {
+                color: MayaColors::OBSIDIAN_BORDER,
+                width: 1.0,
+                radius: 3.0.into(),
+            },
+            icon: MayaColors::PARCHMENT_MUTED,
+            placeholder: MayaColors::GLYPH_DIM,
+            value: MayaColors::STARLIGHT_WHITE,
+            selection: MayaColors::JADE_SHADOW,
+        })
+        .on_input(|val| RightAltarMessage::CommitDescriptionChanged(val).into());
 
         let commit_btn_label = if self.is_amending {
             "🔥 AMEND SACRED SEAL (AMEND)"
@@ -399,7 +432,9 @@ impl RightAltar {
 
         let commit_button = mayan_tooltip(
             button(
-                text(commit_btn_label).size(11).color(MayaColors::OBSIDIAN_VOID)
+                text(commit_btn_label)
+                    .size(11)
+                    .color(MayaColors::OBSIDIAN_VOID),
             )
             .width(Length::Fill)
             .padding(Padding::from([9, 14]))
@@ -489,7 +524,7 @@ impl RightAltar {
                 push_followup,
             ]
             .spacing(2)
-            .padding(Padding::from([8, 12]))
+            .padding(Padding::from([8, 12])),
         )
         .style(|_theme| container::Style {
             background: Some(MayaColors::OBSIDIAN_BASE.into()),

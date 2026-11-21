@@ -73,7 +73,8 @@ impl RebaseCrucible {
         self.conflict_file.clear();
         self.conflict_ours.clear();
         self.conflict_theirs.clear();
-        self.rebase_feedback = format!("Loaded {} commits into rebase sequencer.", self.steps.len());
+        self.rebase_feedback =
+            format!("Loaded {} commits into rebase sequencer.", self.steps.len());
     }
 
     pub fn set_conflict(
@@ -122,18 +123,22 @@ impl RebaseCrucible {
 
         // Load Commits Button
         header_actions = header_actions.push(tooltip(
-            button(text("⚡ LOAD COMMITS").size(10).color(MayaColors::STARLIGHT_WHITE))
-                .padding(Padding::from([3, 10]))
-                .style(|_theme, _status| button::Style {
-                    background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
-                    border: Border {
-                        color: MayaColors::MAYA_BLUE,
-                        width: 1.0,
-                        radius: 3.0.into(),
-                    },
-                    ..Default::default()
-                })
-                .on_press(RebaseMessage::LoadRebaseSteps.into()),
+            button(
+                text("⚡ LOAD COMMITS")
+                    .size(10)
+                    .color(MayaColors::STARLIGHT_WHITE),
+            )
+            .padding(Padding::from([3, 10]))
+            .style(|_theme, _status| button::Style {
+                background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
+                border: Border {
+                    color: MayaColors::MAYA_BLUE,
+                    width: 1.0,
+                    radius: 3.0.into(),
+                },
+                ..Default::default()
+            })
+            .on_press(RebaseMessage::LoadRebaseSteps.into()),
             text("Populate unpushed commits from HEAD vs upstream into rebase sequencer").size(11),
             tooltip::Position::Bottom,
         ));
@@ -142,55 +147,68 @@ impl RebaseCrucible {
             // Continue Button (enabled if no active conflict)
             if !self.has_conflict {
                 header_actions = header_actions.push(tooltip(
-                    button(text("▶ CONTINUE REBASE").size(10).color(MayaColors::OBSIDIAN_VOID))
-                        .padding(Padding::from([3, 10]))
-                        .style(|_theme, _status| button::Style {
-                            background: Some(MayaColors::JADE_GLOW.into()),
-                            border: Border {
-                                color: MayaColors::JADE_PRIME,
-                                width: 1.0,
-                                radius: 3.0.into(),
-                            },
-                            ..Default::default()
-                        })
-                        .on_press(RebaseMessage::ContinueRebase.into()),
-                    text("Continue cherry-picking remaining rebase steps after resolving conflict").size(11),
+                    button(
+                        text("▶ CONTINUE REBASE")
+                            .size(10)
+                            .color(MayaColors::OBSIDIAN_VOID),
+                    )
+                    .padding(Padding::from([3, 10]))
+                    .style(|_theme, _status| button::Style {
+                        background: Some(MayaColors::JADE_GLOW.into()),
+                        border: Border {
+                            color: MayaColors::JADE_PRIME,
+                            width: 1.0,
+                            radius: 3.0.into(),
+                        },
+                        ..Default::default()
+                    })
+                    .on_press(RebaseMessage::ContinueRebase.into()),
+                    text("Continue cherry-picking remaining rebase steps after resolving conflict")
+                        .size(11),
                     tooltip::Position::Bottom,
                 ));
             }
 
             // Abort Button
             header_actions = header_actions.push(tooltip(
-                button(text("✕ ABORT REBASE").size(10).color(MayaColors::STARLIGHT_WHITE))
-                    .padding(Padding::from([3, 10]))
-                    .style(|_theme, _status| button::Style {
-                        background: Some(MayaColors::CINNABAR_DARK.into()),
-                        border: Border {
-                            color: MayaColors::CINNABAR_BRIGHT,
-                            width: 1.0,
-                            radius: 3.0.into(),
-                        },
-                        ..Default::default()
-                    })
-                    .on_press(RebaseMessage::AbortRebase.into()),
+                button(
+                    text("✕ ABORT REBASE")
+                        .size(10)
+                        .color(MayaColors::STARLIGHT_WHITE),
+                )
+                .padding(Padding::from([3, 10]))
+                .style(|_theme, _status| button::Style {
+                    background: Some(MayaColors::CINNABAR_DARK.into()),
+                    border: Border {
+                        color: MayaColors::CINNABAR_BRIGHT,
+                        width: 1.0,
+                        radius: 3.0.into(),
+                    },
+                    ..Default::default()
+                })
+                .on_press(RebaseMessage::AbortRebase.into()),
                 text("Abort rebase and restore previous HEAD state from ORIG_HEAD").size(11),
                 tooltip::Position::Bottom,
             ));
         } else if !self.steps.is_empty() {
             // Execute Rebase Button
             header_actions = header_actions.push(tooltip(
-                button(text("🔥 EXECUTE REBASE").size(10).color(MayaColors::OBSIDIAN_VOID))
-                    .padding(Padding::from([3, 10]))
-                    .style(|_theme, _status| button::Style {
-                        background: Some(MayaColors::SOLAR_GOLD.into()),
-                        border: Border {
-                            color: MayaColors::SOLAR_AMBER,
-                            width: 1.0,
-                            radius: 3.0.into(),
-                        },
-                        ..Default::default()
-                    })
-                    .on_press(RebaseMessage::ExecuteRebase.into()),
+                button(
+                    text("🔥 EXECUTE REBASE")
+                        .size(10)
+                        .color(MayaColors::OBSIDIAN_VOID),
+                )
+                .padding(Padding::from([3, 10]))
+                .style(|_theme, _status| button::Style {
+                    background: Some(MayaColors::SOLAR_GOLD.into()),
+                    border: Border {
+                        color: MayaColors::SOLAR_AMBER,
+                        width: 1.0,
+                        radius: 3.0.into(),
+                    },
+                    ..Default::default()
+                })
+                .on_press(RebaseMessage::ExecuteRebase.into()),
                 text("Apply sequenced rebase plan to branch history (git rebase -i)").size(11),
                 tooltip::Position::Bottom,
             ));
@@ -219,7 +237,12 @@ impl RebaseCrucible {
             };
             container(
                 row![
-                    text(if self.has_conflict { "⚠️ " } else { "ℹ️ " }).size(11),
+                    text(if self.has_conflict {
+                        "⚠️ "
+                    } else {
+                        "ℹ️ "
+                    })
+                    .size(11),
                     text(&self.rebase_feedback).size(11).color(color),
                 ]
                 .align_y(Alignment::Center)
@@ -227,7 +250,13 @@ impl RebaseCrucible {
             )
             .width(Length::Fill)
             .style(|_theme: &iced::Theme| container::Style {
-                background: Some(Color { a: 0.35, ..MayaColors::OBSIDIAN_BASE }.into()),
+                background: Some(
+                    Color {
+                        a: 0.35,
+                        ..MayaColors::OBSIDIAN_BASE
+                    }
+                    .into(),
+                ),
                 border: Border {
                     color: MayaColors::OBSIDIAN_BORDER,
                     width: 1.0,
@@ -281,8 +310,13 @@ impl RebaseCrucible {
         }
 
         let body = scrollable(
-            column![feedback_banner, Space::new().height(6), conflict_banner, step_cards]
-                .padding(Padding::from([8, 12])),
+            column![
+                feedback_banner,
+                Space::new().height(6),
+                conflict_banner,
+                step_cards
+            ]
+            .padding(Padding::from([8, 12])),
         )
         .height(Length::Fill);
 
@@ -290,7 +324,13 @@ impl RebaseCrucible {
             .width(Length::Fill)
             .height(Length::Fill)
             .style(|_theme| container::Style {
-                background: Some(Color { a: 0.55, ..MayaColors::OBSIDIAN_BASE }.into()),
+                background: Some(
+                    Color {
+                        a: 0.55,
+                        ..MayaColors::OBSIDIAN_BASE
+                    }
+                    .into(),
+                ),
                 border: Border {
                     color: MayaColors::OBSIDIAN_BORDER,
                     width: 0.0,
@@ -314,10 +354,30 @@ impl RebaseCrucible {
         };
 
         let action_buttons = row![
-            self.action_pill(idx, "PICK", RebaseAction::Pick, step.action == RebaseAction::Pick),
-            self.action_pill(idx, "REWORD", RebaseAction::Reword, step.action == RebaseAction::Reword),
-            self.action_pill(idx, "SQUASH", RebaseAction::Squash, step.action == RebaseAction::Squash),
-            self.action_pill(idx, "DROP", RebaseAction::Drop, step.action == RebaseAction::Drop),
+            self.action_pill(
+                idx,
+                "PICK",
+                RebaseAction::Pick,
+                step.action == RebaseAction::Pick
+            ),
+            self.action_pill(
+                idx,
+                "REWORD",
+                RebaseAction::Reword,
+                step.action == RebaseAction::Reword
+            ),
+            self.action_pill(
+                idx,
+                "SQUASH",
+                RebaseAction::Squash,
+                step.action == RebaseAction::Squash
+            ),
+            self.action_pill(
+                idx,
+                "DROP",
+                RebaseAction::Drop,
+                step.action == RebaseAction::Drop
+            ),
         ]
         .spacing(4)
         .align_y(Alignment::Center);
@@ -396,7 +456,13 @@ impl RebaseCrucible {
         container(row_content)
             .width(Length::Fill)
             .style(move |_theme| container::Style {
-                background: Some(Color { a: 0.85, ..MayaColors::OBSIDIAN_SURFACE }.into()),
+                background: Some(
+                    Color {
+                        a: 0.85,
+                        ..MayaColors::OBSIDIAN_SURFACE
+                    }
+                    .into(),
+                ),
                 border: Border {
                     color: border_color,
                     width: if is_current { 1.5 } else { 1.0 },
@@ -416,13 +482,33 @@ impl RebaseCrucible {
     ) -> Element<'a, Message> {
         let (bg, text_color, border) = if is_selected {
             match action {
-                RebaseAction::Pick => (MayaColors::JADE_PRIME, MayaColors::OBSIDIAN_VOID, MayaColors::JADE_GLOW),
-                RebaseAction::Reword => (MayaColors::SOLAR_AMBER, MayaColors::OBSIDIAN_VOID, MayaColors::SOLAR_GOLD),
-                RebaseAction::Squash => (MayaColors::MAYA_BLUE, MayaColors::OBSIDIAN_VOID, MayaColors::MAYA_BLUE),
-                RebaseAction::Drop => (MayaColors::CINNABAR_BRIGHT, MayaColors::STARLIGHT_WHITE, MayaColors::CINNABAR_BRIGHT),
+                RebaseAction::Pick => (
+                    MayaColors::JADE_PRIME,
+                    MayaColors::OBSIDIAN_VOID,
+                    MayaColors::JADE_GLOW,
+                ),
+                RebaseAction::Reword => (
+                    MayaColors::SOLAR_AMBER,
+                    MayaColors::OBSIDIAN_VOID,
+                    MayaColors::SOLAR_GOLD,
+                ),
+                RebaseAction::Squash => (
+                    MayaColors::MAYA_BLUE,
+                    MayaColors::OBSIDIAN_VOID,
+                    MayaColors::MAYA_BLUE,
+                ),
+                RebaseAction::Drop => (
+                    MayaColors::CINNABAR_BRIGHT,
+                    MayaColors::STARLIGHT_WHITE,
+                    MayaColors::CINNABAR_BRIGHT,
+                ),
             }
         } else {
-            (MayaColors::OBSIDIAN_BASE, MayaColors::GLYPH_DIM, MayaColors::OBSIDIAN_BORDER)
+            (
+                MayaColors::OBSIDIAN_BASE,
+                MayaColors::GLYPH_DIM,
+                MayaColors::OBSIDIAN_BORDER,
+            )
         };
 
         let tooltip_desc = match action {
@@ -448,16 +534,24 @@ impl RebaseCrucible {
         tooltip(btn, text(tooltip_desc).size(11), tooltip::Position::Top).into()
     }
 
-    fn render_conflict_resolver<'a, Message: 'a + From<RebaseMessage> + Clone>(&'a self) -> Element<'a, Message> {
+    fn render_conflict_resolver<'a, Message: 'a + From<RebaseMessage> + Clone>(
+        &'a self,
+    ) -> Element<'a, Message> {
         let title = row![
-            text("⚔️ CONFLICT CRUCIBLE:").size(11).color(MayaColors::CINNABAR_BRIGHT),
-            text(format!(" {}", self.conflict_file)).size(11).color(MayaColors::STARLIGHT_WHITE),
+            text("⚔️ CONFLICT CRUCIBLE:")
+                .size(11)
+                .color(MayaColors::CINNABAR_BRIGHT),
+            text(format!(" {}", self.conflict_file))
+                .size(11)
+                .color(MayaColors::STARLIGHT_WHITE),
         ]
         .align_y(Alignment::Center);
 
         // Conflicted files tab selector if there are multiple conflicted files
         let file_selector = if self.conflicted_files.len() > 1 {
-            let mut tabs = row![text("Files: ").size(10).color(MayaColors::GLYPH_DIM)].spacing(4).align_y(Alignment::Center);
+            let mut tabs = row![text("Files: ").size(10).color(MayaColors::GLYPH_DIM)]
+                .spacing(4)
+                .align_y(Alignment::Center);
             for f in &self.conflicted_files {
                 let is_active = f == &self.conflict_file;
                 let (bg, border) = if is_active {
@@ -504,9 +598,16 @@ impl RebaseCrucible {
 
         let ours_box = container(
             column![
-                text("OURS (LOCAL HEAD)").size(10).color(MayaColors::JADE_GLOW),
+                text("OURS (LOCAL HEAD)")
+                    .size(10)
+                    .color(MayaColors::JADE_GLOW),
                 Space::new().height(4),
-                scrollable(text(ours_preview).size(10).color(MayaColors::STARLIGHT_WHITE)).height(Length::Fixed(80.0)),
+                scrollable(
+                    text(ours_preview)
+                        .size(10)
+                        .color(MayaColors::STARLIGHT_WHITE)
+                )
+                .height(Length::Fixed(80.0)),
                 Space::new().height(6),
                 tooltip(
                     button(text("Take Ours ✓").size(10).color(MayaColors::JADE_GLOW))
@@ -521,15 +622,22 @@ impl RebaseCrucible {
                             ..Default::default()
                         })
                         .on_press(RebaseMessage::ResolveConflictOurs.into()),
-                    text("Resolve conflict using local HEAD version (git checkout --ours)").size(11),
+                    text("Resolve conflict using local HEAD version (git checkout --ours)")
+                        .size(11),
                     tooltip::Position::Top,
                 ),
             ]
-            .padding(Padding::from([8, 10]))
+            .padding(Padding::from([8, 10])),
         )
         .width(Length::FillPortion(1))
         .style(|_theme| container::Style {
-            background: Some(Color { a: 0.35, ..MayaColors::JADE_SHADOW }.into()),
+            background: Some(
+                Color {
+                    a: 0.35,
+                    ..MayaColors::JADE_SHADOW
+                }
+                .into(),
+            ),
             border: Border {
                 color: MayaColors::JADE_GLOW,
                 width: 1.0,
@@ -540,9 +648,16 @@ impl RebaseCrucible {
 
         let theirs_box = container(
             column![
-                text("THEIRS (INCOMING REBASE)").size(10).color(MayaColors::MAYA_BLUE),
+                text("THEIRS (INCOMING REBASE)")
+                    .size(10)
+                    .color(MayaColors::MAYA_BLUE),
                 Space::new().height(4),
-                scrollable(text(theirs_preview).size(10).color(MayaColors::STARLIGHT_WHITE)).height(Length::Fixed(80.0)),
+                scrollable(
+                    text(theirs_preview)
+                        .size(10)
+                        .color(MayaColors::STARLIGHT_WHITE)
+                )
+                .height(Length::Fixed(80.0)),
                 Space::new().height(6),
                 tooltip(
                     button(text("Take Theirs ✓").size(10).color(MayaColors::MAYA_BLUE))
@@ -557,15 +672,22 @@ impl RebaseCrucible {
                             ..Default::default()
                         })
                         .on_press(RebaseMessage::ResolveConflictTheirs.into()),
-                    text("Resolve conflict using incoming rebase version (git checkout --theirs)").size(11),
+                    text("Resolve conflict using incoming rebase version (git checkout --theirs)")
+                        .size(11),
                     tooltip::Position::Top,
                 ),
             ]
-            .padding(Padding::from([8, 10]))
+            .padding(Padding::from([8, 10])),
         )
         .width(Length::FillPortion(1))
         .style(|_theme| container::Style {
-            background: Some(Color { a: 0.35, ..MayaColors::MAYA_DEEP }.into()),
+            background: Some(
+                Color {
+                    a: 0.35,
+                    ..MayaColors::MAYA_DEEP
+                }
+                .into(),
+            ),
             border: Border {
                 color: MayaColors::MAYA_BLUE,
                 width: 1.0,
@@ -575,18 +697,22 @@ impl RebaseCrucible {
         });
 
         let both_button = tooltip(
-            button(text("Take Both (Ours + Theirs) ⚡").size(10).color(MayaColors::SOLAR_GOLD))
-                .padding(Padding::from([3, 10]))
-                .style(|_theme, _status| button::Style {
-                    background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
-                    border: Border {
-                        color: MayaColors::SOLAR_GOLD,
-                        width: 1.0,
-                        radius: 3.0.into(),
-                    },
-                    ..Default::default()
-                })
-                .on_press(RebaseMessage::ResolveConflictBoth.into()),
+            button(
+                text("Take Both (Ours + Theirs) ⚡")
+                    .size(10)
+                    .color(MayaColors::SOLAR_GOLD),
+            )
+            .padding(Padding::from([3, 10]))
+            .style(|_theme, _status| button::Style {
+                background: Some(MayaColors::OBSIDIAN_SURFACE.into()),
+                border: Border {
+                    color: MayaColors::SOLAR_GOLD,
+                    width: 1.0,
+                    radius: 3.0.into(),
+                },
+                ..Default::default()
+            })
+            .on_press(RebaseMessage::ResolveConflictBoth.into()),
             text("Synthesize both versions by appending Theirs to Ours").size(11),
             tooltip::Position::Top,
         );
@@ -594,7 +720,12 @@ impl RebaseCrucible {
         let action_row = row![
             both_button,
             Space::new().width(Length::Fill),
-            text(format!("{} conflicted file(s)", self.conflicted_files.len())).size(10).color(MayaColors::GLYPH_DIM),
+            text(format!(
+                "{} conflicted file(s)",
+                self.conflicted_files.len()
+            ))
+            .size(10)
+            .color(MayaColors::GLYPH_DIM),
         ]
         .align_y(Alignment::Center);
 

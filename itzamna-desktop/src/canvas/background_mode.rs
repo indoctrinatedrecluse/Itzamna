@@ -31,8 +31,12 @@ impl BackgroundMode {
 
     pub fn description(&self) -> &'static str {
         match self {
-            Self::ProceduralLoom => "Live GPU/Vector Tzolk'in gears & stardust motes (Active 60 FPS)",
-            Self::StaticArtwork => "Static high-res Google Flow temple backdrop (Low Power / Battery Saver)",
+            Self::ProceduralLoom => {
+                "Live GPU/Vector Tzolk'in gears & stardust motes (Active 60 FPS)"
+            }
+            Self::StaticArtwork => {
+                "Static high-res Google Flow temple backdrop (Low Power / Battery Saver)"
+            }
             Self::VideoLoop => "Streaming Google Flow cosmic motion video loop",
             Self::StealthObsidian => "Zero distraction deep obsidian stone relief",
         }

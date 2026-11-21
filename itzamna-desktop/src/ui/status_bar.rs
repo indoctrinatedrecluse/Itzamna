@@ -1,5 +1,5 @@
 //! The Obsidian Altar Bar (Footer Status Bar)
-//! Displays active sovereign branch, commit signet, workspace purity, and Ixchel Oracle heartbeat.
+//! Displays active branch, commit signet, workspace purity, and local telemetry status.
 
 use iced::widget::{container, row, text, Space};
 use iced::{Alignment, Border, Color, Element, Length, Padding};
@@ -11,7 +11,8 @@ pub struct StatusBar {
     pub active_branch: String,
     pub head_sha: String,
     pub is_pristine: bool,
-    pub ixchel_status: &'static str,
+    pub telemetry_status: String,
+    pub update_status: String,
     pub cycle_time: f32,
 }
 
@@ -21,7 +22,8 @@ impl Default for StatusBar {
             active_branch: "main".to_string(),
             head_sha: "4076417".to_string(),
             is_pristine: true,
-            ixchel_status: "Dormant (Local Oracle)",
+            telemetry_status: "Local".into(),
+            update_status: "Checking…".into(),
             cycle_time: 0.0,
         }
     }
@@ -59,9 +61,9 @@ impl StatusBar {
                 .color(MayaColors::CINNABAR_BRIGHT)
         };
 
-        let ixchel_badge = row![
-            text("🌙 IXCHEL:").size(10).color(MayaColors::GLYPH_DIM),
-            text(format!(" {}", self.ixchel_status))
+        let telemetry_badge = row![
+            text("🌙 TELEMETRY:").size(10).color(MayaColors::GLYPH_DIM),
+            text(format!(" {}", self.telemetry_status))
                 .size(11)
                 .color(MayaColors::MAYA_BLUE),
         ]
@@ -77,7 +79,11 @@ impl StatusBar {
             Space::new().width(16),
             purity_badge,
             Space::new().width(Length::Fill),
-            ixchel_badge,
+            telemetry_badge,
+            Space::new().width(16),
+            text(format!("✦ {}", self.update_status))
+                .size(10)
+                .color(MayaColors::SOLAR_GOLD),
             Space::new().width(16),
             cycle_text,
         ]
@@ -87,7 +93,13 @@ impl StatusBar {
         container(content)
             .width(Length::Fill)
             .style(|_theme| container::Style {
-                background: Some(Color { a: 0.96, ..MayaColors::OBSIDIAN_BASE }.into()),
+                background: Some(
+                    Color {
+                        a: 0.96,
+                        ..MayaColors::OBSIDIAN_BASE
+                    }
+                    .into(),
+                ),
                 border: Border {
                     color: MayaColors::OBSIDIAN_BORDER,
                     width: 1.0,

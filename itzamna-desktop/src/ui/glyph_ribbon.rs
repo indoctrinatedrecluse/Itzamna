@@ -17,26 +17,126 @@ pub struct GlyphCard {
 }
 
 pub const SACRED_GLYPHS: [GlyphCard; 20] = [
-    GlyphCard { name: "IMIX", translation: "Water Lily", git_analogy: "Init / Root", symbol_id: 0 },
-    GlyphCard { name: "IK'", translation: "Wind / Breath", git_analogy: "Diff / Patch", symbol_id: 1 },
-    GlyphCard { name: "AK'B'AL", translation: "Night / Void", git_analogy: "Stash Cist", symbol_id: 2 },
-    GlyphCard { name: "K'AN", translation: "Seed / Creation", git_analogy: "Commit", symbol_id: 3 },
-    GlyphCard { name: "CHICCHAN", translation: "Serpent", git_analogy: "Merge / Weave", symbol_id: 4 },
-    GlyphCard { name: "KIMI", translation: "Death / Rebirth", git_analogy: "Prune / Reset", symbol_id: 5 },
-    GlyphCard { name: "MANIK'", translation: "Grasp", git_analogy: "Cherry-Pick", symbol_id: 6 },
-    GlyphCard { name: "LAMAT", translation: "Venus Star", git_analogy: "Tag Signet", symbol_id: 7 },
-    GlyphCard { name: "MULUK", translation: "Sacred Water", git_analogy: "Push / Stream", symbol_id: 8 },
-    GlyphCard { name: "OK", translation: "Guide Dog", git_analogy: "Reflog Trace", symbol_id: 9 },
-    GlyphCard { name: "CHUWEN", translation: "Weaver / Artisan", git_analogy: "DAG Loom", symbol_id: 10 },
-    GlyphCard { name: "EB'", translation: "Sacred Stair", git_analogy: "Rebase Step", symbol_id: 11 },
-    GlyphCard { name: "B'EN", translation: "Pillar / Stela", git_analogy: "Worktree", symbol_id: 12 },
-    GlyphCard { name: "IX", translation: "Jaguar", git_analogy: "Detached Head", symbol_id: 13 },
-    GlyphCard { name: "MEN", translation: "Eagle Vision", git_analogy: "Oracle Metric", symbol_id: 14 },
-    GlyphCard { name: "K'IB'", translation: "Cleansing Owl", git_analogy: "Clean Workspace", symbol_id: 15 },
-    GlyphCard { name: "KAB'AN", translation: "Earth Motion", git_analogy: "Remote Fetch", symbol_id: 16 },
-    GlyphCard { name: "ETZ'NAB'", translation: "Flint Blade", git_analogy: "Hunk Stage", symbol_id: 17 },
-    GlyphCard { name: "KAWAK", translation: "Thundercloud", git_analogy: "Conflict Altar", symbol_id: 18 },
-    GlyphCard { name: "AHAU", translation: "Lord / The Sun", git_analogy: "HEAD Sovereign", symbol_id: 19 },
+    GlyphCard {
+        name: "IMIX",
+        translation: "Water Lily",
+        git_analogy: "Init / Root",
+        symbol_id: 0,
+    },
+    GlyphCard {
+        name: "IK'",
+        translation: "Wind / Breath",
+        git_analogy: "Diff / Patch",
+        symbol_id: 1,
+    },
+    GlyphCard {
+        name: "AK'B'AL",
+        translation: "Night / Void",
+        git_analogy: "Stash Cist",
+        symbol_id: 2,
+    },
+    GlyphCard {
+        name: "K'AN",
+        translation: "Seed / Creation",
+        git_analogy: "Commit",
+        symbol_id: 3,
+    },
+    GlyphCard {
+        name: "CHICCHAN",
+        translation: "Serpent",
+        git_analogy: "Merge / Weave",
+        symbol_id: 4,
+    },
+    GlyphCard {
+        name: "KIMI",
+        translation: "Death / Rebirth",
+        git_analogy: "Prune / Reset",
+        symbol_id: 5,
+    },
+    GlyphCard {
+        name: "MANIK'",
+        translation: "Grasp",
+        git_analogy: "Cherry-Pick",
+        symbol_id: 6,
+    },
+    GlyphCard {
+        name: "LAMAT",
+        translation: "Venus Star",
+        git_analogy: "Tag Signet",
+        symbol_id: 7,
+    },
+    GlyphCard {
+        name: "MULUK",
+        translation: "Sacred Water",
+        git_analogy: "Push / Stream",
+        symbol_id: 8,
+    },
+    GlyphCard {
+        name: "OK",
+        translation: "Guide Dog",
+        git_analogy: "Reflog Trace",
+        symbol_id: 9,
+    },
+    GlyphCard {
+        name: "CHUWEN",
+        translation: "Weaver / Artisan",
+        git_analogy: "DAG Loom",
+        symbol_id: 10,
+    },
+    GlyphCard {
+        name: "EB'",
+        translation: "Sacred Stair",
+        git_analogy: "Rebase Step",
+        symbol_id: 11,
+    },
+    GlyphCard {
+        name: "B'EN",
+        translation: "Pillar / Stela",
+        git_analogy: "Worktree",
+        symbol_id: 12,
+    },
+    GlyphCard {
+        name: "IX",
+        translation: "Jaguar",
+        git_analogy: "Detached Head",
+        symbol_id: 13,
+    },
+    GlyphCard {
+        name: "MEN",
+        translation: "Eagle Vision",
+        git_analogy: "Oracle Metric",
+        symbol_id: 14,
+    },
+    GlyphCard {
+        name: "K'IB'",
+        translation: "Cleansing Owl",
+        git_analogy: "Clean Workspace",
+        symbol_id: 15,
+    },
+    GlyphCard {
+        name: "KAB'AN",
+        translation: "Earth Motion",
+        git_analogy: "Remote Fetch",
+        symbol_id: 16,
+    },
+    GlyphCard {
+        name: "ETZ'NAB'",
+        translation: "Flint Blade",
+        git_analogy: "Hunk Stage",
+        symbol_id: 17,
+    },
+    GlyphCard {
+        name: "KAWAK",
+        translation: "Thundercloud",
+        git_analogy: "Conflict Altar",
+        symbol_id: 18,
+    },
+    GlyphCard {
+        name: "AHAU",
+        translation: "Lord / The Sun",
+        git_analogy: "HEAD Sovereign",
+        symbol_id: 19,
+    },
 ];
 
 #[derive(Debug, Clone)]
@@ -78,10 +178,7 @@ impl GlyphRibbon {
     }
 
     pub fn view<'a, Message: 'a>(&'a self, width: f32, height: f32) -> Element<'a, Message> {
-        Canvas::new(self)
-            .width(width)
-            .height(height)
-            .into()
+        Canvas::new(self).width(width).height(height).into()
     }
 }
 
@@ -104,7 +201,10 @@ impl<Message> canvas::Program<Message> for GlyphRibbon {
         frame.fill_rectangle(
             Point::ORIGIN,
             bounds.size(),
-            Color { a: 0.88, ..MayaColors::OBSIDIAN_BASE },
+            Color {
+                a: 0.88,
+                ..MayaColors::OBSIDIAN_BASE
+            },
         );
 
         // Top and bottom stone relief separator line
@@ -164,9 +264,15 @@ impl GlyphRibbon {
     ) {
         // 1. Stone Cartouche Card Body
         let bg_color = if is_hovered {
-            Color { a: 0.95, ..MayaColors::OBSIDIAN_SURFACE }
+            Color {
+                a: 0.95,
+                ..MayaColors::OBSIDIAN_SURFACE
+            }
         } else {
-            Color { a: 0.65, ..MayaColors::OBSIDIAN_BASE }
+            Color {
+                a: 0.65,
+                ..MayaColors::OBSIDIAN_BASE
+            }
         };
 
         let border_color = if is_hovered {
@@ -197,9 +303,7 @@ impl GlyphRibbon {
         self.draw_glyph_symbol(frame, icon_center, glyph.symbol_id, is_hovered);
 
         // 3. Glyph Sacred Name
-        let name_color = if is_hovered {
-            MayaColors::SOLAR_GOLD
-        } else if index == 19 {
+        let name_color = if is_hovered || index == 19 {
             MayaColors::SOLAR_GOLD
         } else {
             MayaColors::STARLIGHT_WHITE
@@ -239,7 +343,13 @@ impl GlyphRibbon {
         }
     }
 
-    fn draw_glyph_symbol(&self, frame: &mut Frame, center: Point, symbol_id: usize, is_hovered: bool) {
+    fn draw_glyph_symbol(
+        &self,
+        frame: &mut Frame,
+        center: Point,
+        symbol_id: usize,
+        is_hovered: bool,
+    ) {
         let color = if is_hovered {
             MayaColors::JADE_GLOW
         } else {
@@ -251,7 +361,10 @@ impl GlyphRibbon {
             0 => {
                 // Sacred Sun Eye (Ahau / Imix)
                 let eye_outer = Path::circle(center, 9.0);
-                frame.stroke(&eye_outer, Stroke::default().with_color(color).with_width(1.2));
+                frame.stroke(
+                    &eye_outer,
+                    Stroke::default().with_color(color).with_width(1.2),
+                );
                 let pupil = Path::circle(center, 3.5);
                 frame.fill(&pupil, color);
             }
@@ -289,8 +402,14 @@ impl GlyphRibbon {
                     Point::new(center.x, center.y - 5.5),
                     Point::new(center.x, center.y + 5.5),
                 );
-                frame.stroke(&h_cross, Stroke::default().with_color(color).with_width(1.5));
-                frame.stroke(&v_cross, Stroke::default().with_color(color).with_width(1.5));
+                frame.stroke(
+                    &h_cross,
+                    Stroke::default().with_color(color).with_width(1.5),
+                );
+                frame.stroke(
+                    &v_cross,
+                    Stroke::default().with_color(color).with_width(1.5),
+                );
             }
             _ => {
                 // Stepped Pyramid Chevron
@@ -299,7 +418,10 @@ impl GlyphRibbon {
                     b.line_to(Point::new(center.x, center.y - 6.0));
                     b.line_to(Point::new(center.x + 7.0, center.y + 5.0));
                 });
-                frame.stroke(&chevron, Stroke::default().with_color(color).with_width(1.8));
+                frame.stroke(
+                    &chevron,
+                    Stroke::default().with_color(color).with_width(1.8),
+                );
             }
         }
     }

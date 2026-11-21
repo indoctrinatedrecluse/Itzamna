@@ -1,4 +1,4 @@
-name: CI — The Sacred Tests of Itzamna & Ixchel
+name: Itzamna Desktop CI
 
 on:
   pull_request:
@@ -7,8 +7,12 @@ on:
 
 jobs:
   test-desktop:
-    name: Itzamna Desktop (Rust + wgpu)
-    runs-on: windows-latest
+    name: Itzamna Desktop (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
@@ -18,28 +22,15 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
 
+      - name: Install Linux graphics dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libxfixes-dev libgl1-mesa-dev libasound2-dev libudev-dev pkg-config
+
       - name: Cargo Check
         run: cargo check --bin itzamna-desktop --manifest-path itzamna-desktop/Cargo.toml
 
       - name: Cargo Test
         run: cargo test --bin itzamna-desktop --manifest-path itzamna-desktop/Cargo.toml
 
-  test-backend:
-    name: Ixchel Backend (Scala 3 + ZIO 2)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Install Scala CLI
-        run: |
-          curl -fLo scala-cli.deb https://github.com/VirtusLab/scala-cli/releases/latest/download/scala-cli-x86_64-pc-linux.deb
-          sudo dpkg -i scala-cli.deb
-
-      - name: Compile Ixchel
-        run: scala-cli compile --server=false ixchel
+      - name: Release build
+        run: cargo build --release --bin itzamna-desktop --manifest-path itzamna-desktop/Cargo.toml
